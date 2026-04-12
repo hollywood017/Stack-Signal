@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stack &amp; Signal — Build the Stack. Send the Signal.</title>
+  <meta name="description" content="Stack &amp; Signal builds custom websites, SaaS products, and AI-powered tools for businesses that refuse to be invisible. Fast builds. Fair pricing. Direct access." />
+  <meta property="og:title"       content="Stack &amp; Signal" />
+  <meta property="og:description" content="Build the stack. Send the signal." />
+  <meta property="og:type"        content="website" />
+  <meta property="og:url"         content="https://stackandsignal.agency" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23060D1A'/><text y='24' font-size='22' fill='%2300C2FF'>S</text></svg>" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            void:     '#060D1A',
+            navy:     '#0A1628',
+            signal:   '#0057FF',
+            cyan:     '#00C2FF',
+            burn:     '#FF4D00',
+            offwhite: '#F5F4EF',
+          },
+          fontFamily: {
+            display: ['"Bebas Neue"', 'sans-serif'],
+            body:    ['"DM Sans"', 'sans-serif'],
+            mono:    ['"Space Mono"', 'monospace'],
+          },
+        }
+      }
+    }
+  </script>
+
+  <!-- Three.js importmap -->
+  <script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.min.js" } }
+  </script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════
+     THREE.JS CANVAS
+════════════════════════════════════════════════════════ -->
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+
+<!-- ════════════════════════════════════════════════════════
+     NAVIGATION
+════════════════════════════════════════════════════════ -->
+<nav id="site-nav" role="navigation" aria-label="Main navigation">
+  <a href="#hero" class="nav-logo">
+    <!-- Logo Icon SVG -->
+    <svg class="nav-logo-icon" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="4" y="6"  width="20" height="2.5" fill="#00C2FF" rx="0.5"/>
+      <rect x="4" y="12" width="14" height="2.5" fill="#00C2FF" opacity="0.7" rx="0.5"/>
+      <rect x="4" y="18" width="9"  height="2.5" fill="#00C2FF" opacity="0.4" rx="0.5"/>
+      <path d="M20 8 Q26 10 26 16 Q26 22 20 24" stroke="#00C2FF" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.9"/>
+      <path d="M20 10 Q24 12 24 16 Q24 20 20 22" stroke="#00C2FF" stroke-width="1.2" fill="none" stroke-linecap="round" opacity="0.6"/>
+    </svg>
+    STACK <span class="amp">&amp;</span> SIGNAL
+  </a>
+
+  <ul class="nav-links" role="list">
+    <li><a href="#services">Services</a></li>
+    <li><a href="#work">Work</a></li>
+    <li><a href="#process">Process</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="#contact">Contact</a></li>
+  </ul>
+
+  <div class="nav-cta-wrap">
+    <a href="#contact" class="nav-cta">Let's Talk</a>
+  </div>
+
+  <button class="hamburger" id="hamburger" aria-label="Open navigation" aria-expanded="false">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<!-- Mobile Menu Overlay -->
+<div id="mobile-menu" class="mobile-menu" role="dialog" aria-modal="true" aria-label="Mobile navigation">
+  <button id="mobile-close" class="mobile-close" aria-label="Close navigation">✕</button>
+  <a href="#services">Services</a>
+  <a href="#work">Work</a>
+  <a href="#process">Process</a>
+  <a href="#pricing">Pricing</a>
+  <a href="#contact">Contact</a>
+  <a href="#contact" style="color:var(--cyan); margin-top: 16px;">Let's Talk →</a>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     HERO
+════════════════════════════════════════════════════════ -->
+<section id="hero">
+  <div class="hero-overlay" aria-hidden="true"></div>
+
+  <div class="hero-content">
+    <p class="hero-label">Solo Digital Agency · stackandsignal.agency</p>
+
+    <h1 class="hero-h1 reveal-text">
+      We Build<br>the Stack.
+    </h1>
+    <h2 class="hero-h2 reveal-text">
+      We Send the Signal.
+    </h2>
+
+    <p class="hero-sub">
+      Custom websites, SaaS products, and AI-powered builds — delivered faster,
+      priced fairer, and built by the person you actually talk to.
+    </p>
+
+    <div class="hero-actions">
+      <div class="magnetic-wrap">
+        <a href="#contact" class="signal-btn">
+          <span>Send the Signal &nbsp;→</span>
+        </a>
+      </div>
+      <div class="magnetic-wrap">
+        <a href="#work" class="outline-btn">View Work</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="scroll-indicator" aria-hidden="true">
+    <span>Scroll</span>
+    <svg width="16" height="24" viewBox="0 0 16 24" fill="none">
+      <path d="M8 4 L8 20 M2 14 L8 20 L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     SERVICES
+════════════════════════════════════════════════════════ -->
+<section id="services">
+  <div class="section-inner">
+    <p class="section-label">// What I Build</p>
+    <h2 class="section-title reveal-text">Three Pillars.<br>Zero Fluff.</h2>
+    <p class="section-sub" style="margin-bottom: 64px;">
+      Every engagement falls into one of three categories.
+      No bloated retainers — only what moves the needle.
+    </p>
+
+    <div class="services-grid">
+      <!-- Card 1 -->
+      <div class="service-card">
+        <span class="service-number">01</span>
+        <svg class="service-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="4" y="8" width="40" height="28" rx="3" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M4 36 L44 36 M16 44 L32 44 M24 36 L24 44" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <circle cx="30" cy="20" r="6" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M24 20 L18 20 M18 16 L14 20 L18 24" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M34 16 L38 20 L34 24" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <h3 class="service-title">AI Web Builds</h3>
+        <p class="service-desc">
+          High-performance sites powered by modern stacks and AI tooling.
+          From landing pages to full e-commerce — live in 10 business days, not months.
+        </p>
+        <div class="service-tags">
+          <span class="tag">Next.js</span>
+          <span class="tag">Tailwind</span>
+          <span class="tag">Vercel</span>
+          <span class="tag">AI-Assisted</span>
+        </div>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="service-card">
+        <span class="service-number">02</span>
+        <svg class="service-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="4"  y="4"  width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/>
+          <rect x="26" y="4"  width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/>
+          <rect x="4"  y="26" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/>
+          <rect x="26" y="26" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M24 13 L24 35" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 3"/>
+          <path d="M13 24 L35 24" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 3"/>
+          <path d="M30 30 L38 38 M30 38 L38 30" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <h3 class="service-title">Custom SaaS</h3>
+        <p class="service-desc">
+          Full-stack web applications, dashboards, and SaaS platforms built from scratch.
+          Custom auth, databases, APIs — engineered to scale from day one.
+        </p>
+        <div class="service-tags">
+          <span class="tag">React</span>
+          <span class="tag">Node.js</span>
+          <span class="tag">PostgreSQL</span>
+          <span class="tag">Supabase</span>
+        </div>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="service-card">
+        <span class="service-number">03</span>
+        <svg class="service-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="24" cy="24" r="10" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M24 4 L24 10 M24 38 L24 44 M4 24 L10 24 M38 24 L44 24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M8.3 8.3 L12.6 12.6 M35.4 35.4 L39.7 39.7 M8.3 39.7 L12.6 35.4 M35.4 12.6 L39.7 8.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <circle cx="24" cy="24" r="4" fill="currentColor" opacity="0.5"/>
+        </svg>
+        <h3 class="service-title">VA / Operations</h3>
+        <p class="service-desc">
+          Workflow automation, AI agent deployment, and operations infrastructure
+          that removes the busywork so you can focus on what actually matters.
+        </p>
+        <div class="service-tags">
+          <span class="tag">Zapier</span>
+          <span class="tag">Make</span>
+          <span class="tag">n8n</span>
+          <span class="tag">AI Agents</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ════════════════════════════════════════════════════════
+     STATS
+════════════════════════════════════════════════════════ -->
+<section id="stats">
+  <div class="section-inner" style="padding-top: 0; padding-bottom: 0;">
+    <div class="stats-grid">
+      <div class="stat-item">
+        <span class="stat-number" data-count="10" data-suffix="">10</span>
+        <span class="stat-unit">DAYS</span>
+        <span class="stat-label">Average Build<br>Time</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-number" data-count="50" data-suffix="%+">50%+</span>
+        <span class="stat-unit">CHEAPER</span>
+        <span class="stat-label">Than Traditional<br>Agencies</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-number" data-count="100" data-suffix="%">100%</span>
+        <span class="stat-unit">DIRECT ACCESS</span>
+        <span class="stat-label">To the Person<br>Who Builds It</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-number" data-count="0">0</span>
+        <span class="stat-unit">MIDDLEMEN</span>
+        <span class="stat-label">No Account<br>Managers. No BS.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ════════════════════════════════════════════════════════
+     PORTFOLIO BENTO
+════════════════════════════════════════════════════════ -->
+<section id="work">
+  <div class="section-inner">
+    <p class="section-label">// Selected Work</p>
+    <h2 class="section-title reveal-text">Builds That<br>Move Numbers.</h2>
+    <p class="section-sub" style="margin-bottom: 56px;">
+      Every project here started with a real problem and ended with results.
+    </p>
+
+    <div class="bento-grid">
+
+      <!-- Card 1: Large featured -->
+      <div class="bento-card col-span-2 row-span-2">
+        <div>
+          <p class="bento-industry">Home Services · Web Build</p>
+          <h3 class="bento-title">HVAC Pro Website</h3>
+          <p class="bento-desc">
+            Complete digital overhaul for a regional HVAC company.
+            New brand system, mobile-first site with live booking integration.
+            Leads doubled in the first 30 days — from 12/mo to 28/mo.
+          </p>
+          <span class="bento-stat">+133%</span>
+          <span class="bento-stat-label">Lead volume, Month 1 vs. Month 0</span>
+        </div>
+        <div class="bento-footer">
+          <div class="bento-tags">
+            <span class="bento-tag">Next.js</span>
+            <span class="bento-tag">Tailwind</span>
+            <span class="bento-tag">Calendly API</span>
+            <span class="bento-tag">Local SEO</span>
+          </div>
+          <span class="bento-arrow">↗</span>
+        </div>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="bento-card">
+        <div>
+          <p class="bento-industry">Legal · Web Build</p>
+          <h3 class="bento-title">Law Firm Rebrand</h3>
+          <p class="bento-desc">Positioned a solo attorney as a premium boutique firm. 8-page site, 9-day delivery.</p>
+        </div>
+        <div class="bento-footer">
+          <div class="bento-tags">
+            <span class="bento-tag">React</span>
+            <span class="bento-tag">Framer</span>
+          </div>
+          <span class="bento-arrow">↗</span>
+        </div>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="bento-card">
+        <div>
+          <p class="bento-industry">Healthcare · Web Build</p>
+          <h3 class="bento-title">Med Practice Site</h3>
+          <p class="bento-desc">HIPAA-conscious redesign with patient portal integrations and appointment booking.</p>
+        </div>
+        <div class="bento-footer">
+          <div class="bento-tags">
+            <span class="bento-tag">Next.js</span>
+            <span class="bento-tag">Supabase</span>
+          </div>
+          <span class="bento-arrow">↗</span>
+        </div>
+      </div>
+
+      <!-- Card 4 -->
+      <div class="bento-card">
+        <div>
+          <p class="bento-industry">SaaS · Full Stack</p>
+          <h3 class="bento-title">Client Dashboard</h3>
+          <p class="bento-desc">Custom reporting and billing dashboard for a service business. Auth, roles, CSV exports.</p>
+        </div>
+        <div class="bento-footer">
+          <div class="bento-tags">
+            <span class="bento-tag">React</span>
+            <span class="bento-tag">Node</span>
+            <span class="bento-tag">PostgreSQL</span>
+          </div>
+          <span class="bento-arrow">↗</span>
+        </div>
+      </div>
+
+      <!-- Card 5 -->
+      <div class="bento-card">
+        <div>
+          <p class="bento-industry">E-Commerce · Web Build</p>
+          <h3 class="bento-title">Retail Replatform</h3>
+          <p class="bento-desc">Migrated from aging WordPress to a headless Next.js + Stripe storefront. 40% faster load.</p>
+        </div>
+        <div class="bento-footer">
+          <div class="bento-tags">
+            <span class="bento-tag">Next.js</span>
+            <span class="bento-tag">Stripe</span>
+          </div>
+          <span class="bento-arrow">↗</span>
+        </div>
+      </div>
+
+      <!-- Card 6 -->
+      <div class="bento-card">
+        <div>
+          <p class="bento-industry">Operations · Automation</p>
+          <h3 class="bento-title">AI Lead Capture</h3>
+          <p class="bento-desc">Zapier + OpenAI pipeline that qualifies and routes leads 24/7. Saves 15+ hrs/week.</p>
+        </div>
+        <div class="bento-footer">
+          <div class="bento-tags">
+            <span class="bento-tag">Zapier</span>
+            <span class="bento-tag">OpenAI</span>
+            <span class="bento-tag">Airtable</span>
+          </div>
+          <span class="bento-arrow">↗</span>
+        </div>
+      </div>
+
+    </div><!-- .bento-grid -->
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ════════════════════════════════════════════════════════
+     BUILD THE STACK TOGGLE
+════════════════════════════════════════════════════════ -->
+<section id="build-the-stack">
+  <div class="section-inner">
+    <p class="section-label">// The Tech</p>
+    <h2 class="section-title reveal-text">Build the Stack.</h2>
+    <p class="section-sub" style="margin-bottom: 48px;">
+      Modern, battle-tested tooling across every service vertical.
+      Pick your build type and see what goes into it.
+    </p>
+
+    <div class="stack-tabs" role="tablist" aria-label="Tech stack selector">
+      <button class="stack-tab" data-stack-tab="web"  role="tab" aria-selected="true">Web Build</button>
+      <button class="stack-tab" data-stack-tab="saas" role="tab" aria-selected="false">SaaS / App</button>
+      <button class="stack-tab" data-stack-tab="ops"  role="tab" aria-selected="false">Ops / AI</button>
+    </div>
+
+    <div class="stack-panels">
+
+      <!-- Web Build Panel -->
+      <div class="stack-panel" data-stack-panel="web" role="tabpanel">
+        <div class="tech-item"><span class="tech-icon">⬛</span><span class="tech-name">Next.js</span></div>
+        <div class="tech-item"><span class="tech-icon">⚛️</span><span class="tech-name">React</span></div>
+        <div class="tech-item"><span class="tech-icon">🎨</span><span class="tech-name">Tailwind</span></div>
+        <div class="tech-item"><span class="tech-icon">▲</span><span class="tech-name">Vercel</span></div>
+        <div class="tech-item"><span class="tech-icon">🟩</span><span class="tech-name">Supabase</span></div>
+        <div class="tech-item"><span class="tech-icon">💳</span><span class="tech-name">Stripe</span></div>
+        <div class="tech-item"><span class="tech-icon">🖼️</span><span class="tech-name">Framer</span></div>
+      </div>
+
+      <!-- SaaS Panel -->
+      <div class="stack-panel" data-stack-panel="saas" role="tabpanel">
+        <div class="tech-item"><span class="tech-icon">⚛️</span><span class="tech-name">React</span></div>
+        <div class="tech-item"><span class="tech-icon">🟢</span><span class="tech-name">Node.js</span></div>
+        <div class="tech-item"><span class="tech-icon">🐘</span><span class="tech-name">PostgreSQL</span></div>
+        <div class="tech-item"><span class="tech-icon">🐳</span><span class="tech-name">Docker</span></div>
+        <div class="tech-item"><span class="tech-icon">☁️</span><span class="tech-name">AWS / GCP</span></div>
+        <div class="tech-item"><span class="tech-icon">🔐</span><span class="tech-name">Auth.js</span></div>
+        <div class="tech-item"><span class="tech-icon">🔗</span><span class="tech-name">REST APIs</span></div>
+      </div>
+
+      <!-- Ops / AI Panel -->
+      <div class="stack-panel" data-stack-panel="ops" role="tabpanel">
+        <div class="tech-item"><span class="tech-icon">⚡</span><span class="tech-name">Zapier</span></div>
+        <div class="tech-item"><span class="tech-icon">🔧</span><span class="tech-name">Make.com</span></div>
+        <div class="tech-item"><span class="tech-icon">📊</span><span class="tech-name">Airtable</span></div>
+        <div class="tech-item"><span class="tech-icon">📋</span><span class="tech-name">Notion</span></div>
+        <div class="tech-item"><span class="tech-icon">🔀</span><span class="tech-name">n8n</span></div>
+        <div class="tech-item"><span class="tech-icon">🤖</span><span class="tech-name">AI Agents</span></div>
+        <div class="tech-item"><span class="tech-icon">💬</span><span class="tech-name">Slack</span></div>
+      </div>
+
+    </div><!-- .stack-panels -->
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ════════════════════════════════════════════════════════
+     PROCESS
+════════════════════════════════════════════════════════ -->
+<section id="process">
+  <div class="section-inner">
+    <p class="section-label">// How It Works</p>
+    <h2 class="section-title reveal-text">No Guesswork.<br>No Surprises.</h2>
+    <p class="section-sub" style="margin-bottom: 80px;">
+      Three steps. Fixed pricing. You know exactly what you're getting and when.
+    </p>
+
+    <div class="process-steps">
+      <div class="process-line" aria-hidden="true"></div>
+
+      <div class="process-step">
+        <div class="step-dot" aria-hidden="true">
+          <span class="step-number">01</span>
+        </div>
+        <h3 class="step-title">Scope.</h3>
+        <p class="step-desc">
+          Send a brief. I audit your current digital presence, define exact deliverables,
+          and give you a fixed price and timeline. No hourly surprises. No scope creep.
+        </p>
+      </div>
+
+      <div class="process-step">
+        <div class="step-dot" aria-hidden="true">
+          <span class="step-number">02</span>
+        </div>
+        <h3 class="step-title">Build.</h3>
+        <p class="step-desc">
+          I execute with a modern, battle-tested stack. You get milestone check-ins,
+          not radio silence. Every build is mobile-first, performance-optimized, and ready to rank.
+        </p>
+      </div>
+
+      <div class="process-step">
+        <div class="step-dot" aria-hidden="true">
+          <span class="step-number">03</span>
+        </div>
+        <h3 class="step-title">Signal.</h3>
+        <p class="step-desc">
+          Launch day. Your site goes live, leads start moving, and you have 30 days
+          of direct post-launch support. You talk to me — not an account manager.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ════════════════════════════════════════════════════════
+     PRICING
+════════════════════════════════════════════════════════ -->
+<section id="pricing">
+  <div class="section-inner">
+    <p class="section-label">// Investment</p>
+    <h2 class="section-title reveal-text">Fixed Pricing.<br>Zero Surprises.</h2>
+    <p class="section-sub" style="margin-bottom: 72px;">
+      Professional agency results at 40–60% below what a traditional agency charges.
+      Every quote is fixed-cost — no hourly billing, no scope ambiguity.
+    </p>
+
+    <div class="pricing-grid">
+
+      <!-- Tier 1 -->
+      <div class="pricing-card">
+        <span class="pricing-tier">Starter</span>
+        <h3 class="pricing-title">Web Build</h3>
+        <span class="price-amount">$1,200</span>
+        <span class="price-note">starting from · up to $2,200</span>
+        <div class="pricing-divider"></div>
+        <ul class="pricing-features">
+          <li>Up to 8 pages, fully responsive</li>
+          <li>Mobile-first, performance optimized</li>
+          <li>Contact form + basic integrations</li>
+          <li>On-page SEO foundations</li>
+          <li>10-business-day delivery</li>
+          <li>30 days post-launch support</li>
+        </ul>
+        <a href="#contact" class="pricing-cta">Start a Project</a>
+      </div>
+
+      <!-- Tier 2: Featured -->
+      <div class="pricing-card featured">
+        <span class="pricing-badge">Most Popular</span>
+        <span class="pricing-tier">Business</span>
+        <h3 class="pricing-title">Custom Build</h3>
+        <span class="price-amount">$2,500</span>
+        <span class="price-note">starting from · up to $5,000</span>
+        <div class="pricing-divider"></div>
+        <ul class="pricing-features">
+          <li>Custom design system + brand identity</li>
+          <li>CMS integration (Sanity, Contentful, or custom)</li>
+          <li>Advanced animations + interactions</li>
+          <li>Third-party API integrations</li>
+          <li>2 rounds of revisions included</li>
+          <li>SEO setup + analytics</li>
+          <li>30 days post-launch support</li>
+        </ul>
+        <a href="#contact" class="pricing-cta">Start a Project</a>
+      </div>
+
+      <!-- Tier 3 -->
+      <div class="pricing-card">
+        <span class="pricing-tier">Enterprise</span>
+        <h3 class="pricing-title">Web App / SaaS</h3>
+        <span class="price-amount">$4,500</span>
+        <span class="price-note">starting from · up to $12,000</span>
+        <div class="pricing-divider"></div>
+        <ul class="pricing-features">
+          <li>Full-stack application architecture</li>
+          <li>User auth, roles + permissions</li>
+          <li>Custom database + API layer</li>
+          <li>Admin dashboard + reporting</li>
+          <li>Payment processing (Stripe)</li>
+          <li>Deployment + CI/CD pipeline</li>
+          <li>60 days post-launch support</li>
+        </ul>
+        <a href="#contact" class="pricing-cta">Start a Project</a>
+      </div>
+
+    </div><!-- .pricing-grid -->
+
+    <p class="pricing-footnote">
+      All builds: 50% deposit on kick-off · 50% on delivery · Fixed scope · No hidden fees
+    </p>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ════════════════════════════════════════════════════════
+     CONTACT / CTA
+════════════════════════════════════════════════════════ -->
+<section id="contact">
+  <div class="section-inner">
+    <div class="contact-grid">
+
+      <!-- Left: CTA copy -->
+      <div>
+        <p class="section-label">// Let's Work</p>
+        <h2 class="contact-title reveal-text">
+          Ready to Send<br>the <span class="highlight">Signal?</span>
+        </h2>
+        <p class="contact-sub">
+          No discovery calls required. Send your brief and I'll respond
+          within 24 hours with a clear scope and fixed quote.
+        </p>
+
+        <div class="contact-meta">
+          <div class="contact-meta-item">
+            <div class="contact-meta-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M8 5 L8 8 L10 10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            </div>
+            <div class="contact-meta-text">
+              <strong>24-Hour Response</strong>
+              Every brief gets a reply within one business day.
+            </div>
+          </div>
+          <div class="contact-meta-item">
+            <div class="contact-meta-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2 L10 6 L14 6.5 L11 9.5 L11.5 14 L8 11.5 L4.5 14 L5 9.5 L2 6.5 L6 6 Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="contact-meta-text">
+              <strong>Direct Founder Access</strong>
+              You talk to the builder — not a junior PM.
+            </div>
+          </div>
+          <div class="contact-meta-item">
+            <div class="contact-meta-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M2 7 L8 10 L14 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            </div>
+            <div class="contact-meta-text">
+              <strong>nick@stackandsignal.agency</strong>
+              Or fill out the brief — same inbox.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Form -->
+      <div>
+        <form class="contact-form" name="contact" method="POST" action="#" novalidate>
+          <div class="form-group">
+            <label class="form-label" for="name">Your Name</label>
+            <input class="form-input" type="text" id="name" name="name" placeholder="Jane Smith" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="email">Email Address</label>
+            <input class="form-input" type="email" id="email" name="email" placeholder="jane@company.com" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="service">Service</label>
+            <select class="form-input" id="service" name="service" style="cursor: pointer; background-image: none;">
+              <option value="" style="background: #0A1628;">Select a service...</option>
+              <option value="web" style="background: #0A1628;">AI Web Build</option>
+              <option value="saas" style="background: #0A1628;">Custom SaaS / App</option>
+              <option value="ops" style="background: #0A1628;">VA / Operations</option>
+              <option value="other" style="background: #0A1628;">Something Else</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="brief">Project Brief</label>
+            <textarea class="form-textarea" id="brief" name="brief" placeholder="Tell me what you're building, what the problem is, and what success looks like. The more specific, the better." required></textarea>
+          </div>
+          <div class="form-submit magnetic-wrap">
+            <button type="submit" class="signal-btn">
+              <span>Send the Brief &nbsp;→</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+    </div><!-- .contact-grid -->
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════
+     FOOTER
+════════════════════════════════════════════════════════ -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-top">
+
+      <!-- Brand -->
+      <div>
+        <a href="#hero" class="footer-logo">
+          <svg width="24" height="24" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="4" y="6"  width="20" height="2.5" fill="#00C2FF" rx="0.5"/>
+            <rect x="4" y="12" width="14" height="2.5" fill="#00C2FF" opacity="0.7" rx="0.5"/>
+            <rect x="4" y="18" width="9"  height="2.5" fill="#00C2FF" opacity="0.4" rx="0.5"/>
+            <path d="M20 8 Q26 10 26 16 Q26 22 20 24" stroke="#00C2FF" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.9"/>
+          </svg>
+          STACK <span class="amp">&amp;</span> SIGNAL
+        </a>
+        <p class="footer-tagline">Build the stack. Send the signal.</p>
+      </div>
+
+      <!-- Nav -->
+      <nav class="footer-nav" aria-label="Footer navigation">
+        <a href="#services">Services</a>
+        <a href="#work">Work</a>
+        <a href="#process">Process</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#contact">Contact</a>
+      </nav>
+
+      <!-- Social -->
+      <div class="footer-social">
+        <a href="https://linkedin.com/company/stackandsignal" class="social-link" target="_blank" rel="noopener" aria-label="LinkedIn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2" fill="currentColor"/></svg>
+        </a>
+        <a href="https://x.com/stackandsignal" class="social-link" target="_blank" rel="noopener" aria-label="X / Twitter">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        </a>
+      </div>
+
+    </div><!-- .footer-top -->
+
+    <div class="footer-bottom">
+      <p class="footer-copy">&copy; 2025 Stack &amp; Signal. All rights reserved.</p>
+      <div class="footer-email">
+        <a href="mailto:nick@stackandsignal.agency">nick@stackandsignal.agency</a>
+      </div>
+    </div>
+
+  </div><!-- .footer-inner -->
+</footer>
+
+<!-- ════════════════════════════════════════════════════════
+     SCRIPTS
+════════════════════════════════════════════════════════ -->
+<script type="module" src="js/main.js"></script>
+
+</body>
+</html>
