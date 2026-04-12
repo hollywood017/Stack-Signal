@@ -1,321 +1,357 @@
 /**
- * STACK & SIGNAL — Three.js Digital Signal Background
- * A mouse-reactive grid of glowing points and connecting lines
- * with a heartbeat pulse animation.
+ * STACK & SIGNAL — Galaxy / Neural Nebula Background
+ * ~13,500 particles in 4 logarithmic spiral arms with differential rotation,
+ * neural connection lines, mouse gravity well, and slow camera orbit.
  */
 import * as THREE from 'three';
 
 // ── Configuration ────────────────────────────────────────────
 const CFG = {
-  GRID_COLS:            28,
-  GRID_ROWS:            18,
-  POINT_SPACING_X:      null,   // computed from viewport
-  POINT_SPACING_Y:      null,   // computed from viewport
-  CONNECTION_DIST:      120,    // world-unit radius for drawing a line
-  MOUSE_RADIUS:         160,    // world-unit radius of mouse influence
-  MOUSE_STRENGTH:       28,     // max displacement
-  SPRING_STIFFNESS:     0.08,
-  SPRING_DAMPING:       0.82,
-  HEARTBEAT_INTERVAL:   3200,   // ms between pulses
-  HEARTBEAT_DURATION:   1800,   // ms for one pulse to cross grid
-  POINT_COLOR:          0x00C2FF,
-  LINE_COLOR:           0x0057FF,
-  LINE_COLOR_PULSE:     0x00C2FF,
-  POINT_OPACITY:        0.65,
-  LINE_OPACITY_BASE:    0.12,
-  LINE_OPACITY_PULSE:   0.55,
-  POINT_SIZE:           2.2,
-  CAM_Z:                550,
+  N_CORE:          900,      // dense bright core cluster
+  N_ARMS:          4,        // spiral arm count
+  N_PER_ARM:       3000,     // particles per arm
+  N_DUST:          1500,     // scattered background dust
+  // TOTAL ≈ 13,500
+  RADIUS_MAX:      420,      // world units — max arm radius
+  SPIRAL_B:        0.22,     // log spiral tightness
+  ARM_SPREAD:      0.38,     // scatter perpendicular to arm (fraction of r)
+  BASE_OMEGA:      0.000055, // base angular velocity (rad/frame)
+  LINE_DIST:       38,       // max world-unit distance for neural connections
+  MAX_LINES:       18000,    // cap line count for GPU budget
+  MOUSE_RADIUS:    180,      // gravity well radius (world units)
+  MOUSE_GRAVITY:   55,       // gravity well strength
+  GRAVITY_DAMPING: 0.88,     // velocity damping for displaced particles
+  CAM_TILT:        0.42,     // radians — camera pitch down
+  CAM_RADIUS:      680,      // camera orbit radius
+  CAM_ORBIT_SPEED: 0.000045, // camera orbit speed (rad/frame)
+  GALAXY_Z_THICK:  18,       // vertical disk scatter
+  POINT_SIZE_BASE: 1.8,
+  LINE_OPACITY:    0.09,
 };
 
-// ── State ────────────────────────────────────────────────────
+// Per-vertex colors (RGB 0–1)
+const CORE_COLOR = [200/255, 232/255, 255/255]; // near-white blue
+const ARM_INNER  = [0,       194/255, 1.0     ]; // electric cyan
+const ARM_OUTER  = [0,       87/255,  1.0     ]; // deep signal blue
+const DUST_COLOR = [0,       24/255,  68/255  ]; // very dark blue
+
+// ── State ─────────────────────────────────────────────────────
 let renderer, scene, camera;
 let pointsMesh, linesMesh;
-let pointPositions, origX, origY, velX, velY;
-let lineIndices   = [];  // pairs of indices connected by lines
-let linePositions;       // Float32Array for line geometry
-let N = 0;               // total point count
+let N = 0;
+let positions;      // Float32Array(N*3) — live XYZ
+let colors;         // Float32Array(N*3) — static per-vertex RGB
+let orbAngle;       // Float32Array(N) — current orbital angle (XZ plane)
+let orbRadius;      // Float32Array(N) — radial distance, constant
+let origY;          // Float32Array(N) — original Y height, constant
+let dispX, dispZ;   // Float32Array(N) — mouse gravity displacement
+let velX, velZ;     // Float32Array(N) — displacement velocity
+let lineIndexPairs; // Int32Array([i,j, i,j, ...])
+let linePositions;  // Float32Array for line segment endpoints
+let camAngle = 0;
+let mouseWorldX = 0, mouseWorldZ = 0;
+let hasMouse = false;
 
-let mouseWorldX = -9999, mouseWorldY = -9999;
+const raycaster   = new THREE.Raycaster();
+const galaxyPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const intersectPt = new THREE.Vector3();
 
-let pulseActive    = false;
-let pulseStartTime = 0;
-let pulseOriginX   = 0;
-
-// ── Boot ─────────────────────────────────────────────────────
+// ── Boot ──────────────────────────────────────────────────────
 export function initThreeBg() {
   const canvas = document.getElementById('bg-canvas');
   if (!canvas) return;
 
-  // Renderer
   renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight);
 
-  // Scene
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x060D1A);
 
-  // Camera — perspective, near-flat view of 2D grid
-  camera = new THREE.PerspectiveCamera(
-    55,
-    window.innerWidth / window.innerHeight,
-    1, 2000
-  );
-  camera.position.set(0, 0, CFG.CAM_Z);
-  camera.lookAt(0, 0, 0);
+  camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 3000);
+  setCameraPosition();
 
-  buildGrid();
+  buildGalaxy();
 
-  // Events
   window.addEventListener('resize',    onResize,    { passive: true });
   window.addEventListener('mousemove', onMouseMove, { passive: true });
-  window.addEventListener('touchmove', onTouchMove, { passive: true });
 
-  // Heartbeat pulse
-  setTimeout(triggerPulse, 1200);
-  setInterval(triggerPulse, CFG.HEARTBEAT_INTERVAL);
-
-  // Animation loop
   renderer.setAnimationLoop(animate);
 }
 
-// ── Grid Construction ────────────────────────────────────────
-function buildGrid() {
-  N = CFG.GRID_COLS * CFG.GRID_ROWS;
+// ── Camera orbit ──────────────────────────────────────────────
+function setCameraPosition() {
+  const hDist = CFG.CAM_RADIUS * Math.cos(CFG.CAM_TILT);
+  camera.position.set(
+    Math.sin(camAngle) * hDist,
+    Math.sin(CFG.CAM_TILT) * CFG.CAM_RADIUS,
+    Math.cos(camAngle) * hDist
+  );
+  camera.lookAt(0, 0, 0);
+}
 
-  // Compute spacing so grid fills ~85% of viewport
-  const vFOV = (camera.fov * Math.PI) / 180;
-  const viewH = 2 * Math.tan(vFOV / 2) * CFG.CAM_Z;
-  const viewW = viewH * camera.aspect;
-  CFG.POINT_SPACING_X = (viewW * 0.95) / (CFG.GRID_COLS - 1);
-  CFG.POINT_SPACING_Y = (viewH * 0.95) / (CFG.GRID_ROWS - 1);
+// ── Build galaxy ──────────────────────────────────────────────
+function buildGalaxy() {
+  const N_ARM_TOTAL = CFG.N_ARMS * CFG.N_PER_ARM;
+  N = CFG.N_CORE + N_ARM_TOTAL + CFG.N_DUST;
 
-  const halfW = ((CFG.GRID_COLS - 1) * CFG.POINT_SPACING_X) / 2;
-  const halfH = ((CFG.GRID_ROWS - 1) * CFG.POINT_SPACING_Y) / 2;
+  positions = new Float32Array(N * 3);
+  colors    = new Float32Array(N * 3);
+  orbAngle  = new Float32Array(N);
+  orbRadius = new Float32Array(N);
+  origY     = new Float32Array(N);
+  dispX     = new Float32Array(N);
+  dispZ     = new Float32Array(N);
+  velX      = new Float32Array(N);
+  velZ      = new Float32Array(N);
 
-  origX = new Float32Array(N);
-  origY = new Float32Array(N);
-  velX  = new Float32Array(N);
-  velY  = new Float32Array(N);
+  let idx = 0;
 
-  pointPositions = new Float32Array(N * 3);
+  // ── Core: Box-Muller gaussian cluster ──
+  for (let i = 0; i < CFG.N_CORE; i++, idx++) {
+    const u   = Math.random() + 1e-9;
+    const mag = Math.sqrt(-2 * Math.log(u)) * 28;
+    const th  = 2 * Math.PI * Math.random();
+    const x   = mag * Math.cos(th);
+    const z   = mag * Math.sin(th);
+    const y   = (Math.random() - 0.5) * 24;
+    positions[idx*3]   = x;
+    positions[idx*3+1] = y;
+    positions[idx*3+2] = z;
+    orbAngle[idx]  = Math.atan2(z, x);
+    orbRadius[idx] = Math.sqrt(x*x + z*z);
+    origY[idx]     = y;
+    colors[idx*3]   = CORE_COLOR[0];
+    colors[idx*3+1] = CORE_COLOR[1];
+    colors[idx*3+2] = CORE_COLOR[2];
+  }
 
-  for (let row = 0; row < CFG.GRID_ROWS; row++) {
-    for (let col = 0; col < CFG.GRID_COLS; col++) {
-      const i = row * CFG.GRID_COLS + col;
-      const x = col * CFG.POINT_SPACING_X - halfW;
-      const y = row * CFG.POINT_SPACING_Y - halfH;
-      origX[i] = x;
-      origY[i] = y;
-      pointPositions[i * 3]     = x;
-      pointPositions[i * 3 + 1] = y;
-      pointPositions[i * 3 + 2] = 0;
+  // ── Arms: logarithmic spiral ──
+  const expMax = Math.exp(CFG.SPIRAL_B * 4.5 * Math.PI) - 1;
+  for (let arm = 0; arm < CFG.N_ARMS; arm++) {
+    const armOff = (arm / CFG.N_ARMS) * 2 * Math.PI;
+    for (let i = 0; i < CFG.N_PER_ARM; i++, idx++) {
+      const t       = 0.001 + Math.random() * 0.999;
+      const angle   = t * 4.5 * Math.PI;
+      const r       = ((Math.exp(CFG.SPIRAL_B * angle) - 1) / expMax) * CFG.RADIUS_MAX;
+      const scatter = (Math.random() - 0.5) * CFG.ARM_SPREAD * r;
+      const totalA  = angle + armOff;
+      const x = (r + scatter) * Math.cos(totalA);
+      const z = (r + scatter) * Math.sin(totalA);
+      const y = (Math.random() - 0.5) * CFG.GALAXY_Z_THICK;
+      positions[idx*3]   = x;
+      positions[idx*3+1] = y;
+      positions[idx*3+2] = z;
+      orbAngle[idx]  = Math.atan2(z, x);
+      orbRadius[idx] = Math.sqrt(x*x + z*z);
+      origY[idx]     = y;
+      // Color lerp INNER→OUTER by radius fraction
+      const frac = Math.min(r / CFG.RADIUS_MAX, 1);
+      colors[idx*3]   = ARM_INNER[0] + (ARM_OUTER[0] - ARM_INNER[0]) * frac;
+      colors[idx*3+1] = ARM_INNER[1] + (ARM_OUTER[1] - ARM_INNER[1]) * frac;
+      colors[idx*3+2] = ARM_INNER[2] + (ARM_OUTER[2] - ARM_INNER[2]) * frac;
     }
   }
 
-  // ── Points mesh ──
+  // ── Dust: uniform disk ──
+  for (let i = 0; i < CFG.N_DUST; i++, idx++) {
+    const ang = Math.random() * 2 * Math.PI;
+    const r   = Math.sqrt(Math.random()) * CFG.RADIUS_MAX * 1.3;
+    const x   = r * Math.cos(ang);
+    const z   = r * Math.sin(ang);
+    const y   = (Math.random() - 0.5) * CFG.GALAXY_Z_THICK * 2;
+    positions[idx*3]   = x;
+    positions[idx*3+1] = y;
+    positions[idx*3+2] = z;
+    orbAngle[idx]  = ang;
+    orbRadius[idx] = r;
+    origY[idx]     = y;
+    colors[idx*3]   = DUST_COLOR[0];
+    colors[idx*3+1] = DUST_COLOR[1];
+    colors[idx*3+2] = DUST_COLOR[2];
+  }
+
+  // Points geometry
   const ptGeo = new THREE.BufferGeometry();
-  ptGeo.setAttribute('position', new THREE.BufferAttribute(pointPositions, 3));
+  ptGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  ptGeo.setAttribute('color',    new THREE.BufferAttribute(colors, 3));
 
   const ptMat = new THREE.PointsMaterial({
-    color:       CFG.POINT_COLOR,
-    size:        CFG.POINT_SIZE,
-    transparent: true,
-    opacity:     CFG.POINT_OPACITY,
-    sizeAttenuation: false,
-    depthWrite:  false,
+    vertexColors:    true,
+    size:            CFG.POINT_SIZE_BASE,
+    sizeAttenuation: true,
+    transparent:     true,
+    opacity:         0.85,
+    depthWrite:      false,
+    blending:        THREE.AdditiveBlending,
   });
 
   pointsMesh = new THREE.Points(ptGeo, ptMat);
   scene.add(pointsMesh);
 
-  // ── Lines mesh ──
-  buildLineGeometry();
+  buildLines();
 }
 
-function buildLineGeometry() {
-  // Collect adjacent pairs (horizontal, vertical, diagonal)
-  lineIndices = [];
+// ── Build neural lines via spatial grid bucketing ─────────────
+function buildLines() {
+  const lineN  = CFG.N_CORE + CFG.N_ARMS * CFG.N_PER_ARM; // skip dust
+  const cs     = CFG.LINE_DIST;
+  const distSq = cs * cs;
+  const grid   = new Map();
 
-  for (let i = 0; i < N; i++) {
-    const row = Math.floor(i / CFG.GRID_COLS);
-    const col = i % CFG.GRID_COLS;
+  // Bucket particles into grid cells
+  for (let i = 0; i < lineN; i++) {
+    const cx  = Math.floor(positions[i*3]   / cs);
+    const cz  = Math.floor(positions[i*3+2] / cs);
+    const key = (cx + 1000) * 10000 + (cz + 1000);
+    let cell = grid.get(key);
+    if (!cell) { cell = []; grid.set(key, cell); }
+    cell.push(i);
+  }
 
-    // right, down, diagonal-right-down, diagonal-left-down
-    const neighbors = [
-      col < CFG.GRID_COLS - 1 ? i + 1 : -1,
-      row < CFG.GRID_ROWS - 1 ? i + CFG.GRID_COLS : -1,
-      (col < CFG.GRID_COLS - 1 && row < CFG.GRID_ROWS - 1) ? i + CFG.GRID_COLS + 1 : -1,
-      (col > 0 && row < CFG.GRID_ROWS - 1)                  ? i + CFG.GRID_COLS - 1 : -1,
-    ];
+  const pairsArr = [];
 
-    for (const j of neighbors) {
-      if (j !== -1) lineIndices.push(i, j);
+  outer:
+  for (let i = 0; i < lineN; i++) {
+    const xi = positions[i*3], zi = positions[i*3+2];
+    const cx = Math.floor(xi / cs);
+    const cz = Math.floor(zi / cs);
+
+    for (let dcx = -1; dcx <= 1; dcx++) {
+      for (let dcz = -1; dcz <= 1; dcz++) {
+        const cell = grid.get((cx + dcx + 1000) * 10000 + (cz + dcz + 1000));
+        if (!cell) continue;
+        for (const j of cell) {
+          if (j <= i) continue;
+          const dx = xi               - positions[j*3];
+          const dy = positions[i*3+1] - positions[j*3+1];
+          const dz = zi               - positions[j*3+2];
+          if (dx*dx + dy*dy + dz*dz < distSq) {
+            pairsArr.push(i, j);
+            if (pairsArr.length >= CFG.MAX_LINES * 2) break outer;
+          }
+        }
+      }
     }
   }
 
-  linePositions = new Float32Array(lineIndices.length * 3);
+  lineIndexPairs = new Int32Array(pairsArr);
+  const lineCount = lineIndexPairs.length / 2;
+  linePositions   = new Float32Array(lineCount * 6);
 
-  // Populate initial positions
-  updateLinePositions();
+  // Write initial positions into line buffer
+  for (let l = 0; l < lineCount; l++) {
+    const i = lineIndexPairs[l*2], j = lineIndexPairs[l*2+1];
+    linePositions[l*6]   = positions[i*3];
+    linePositions[l*6+1] = positions[i*3+1];
+    linePositions[l*6+2] = positions[i*3+2];
+    linePositions[l*6+3] = positions[j*3];
+    linePositions[l*6+4] = positions[j*3+1];
+    linePositions[l*6+5] = positions[j*3+2];
+  }
 
   const lineGeo = new THREE.BufferGeometry();
   lineGeo.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
 
   const lineMat = new THREE.LineBasicMaterial({
-    color:       CFG.LINE_COLOR,
+    color:       0x0057FF,
     transparent: true,
-    opacity:     CFG.LINE_OPACITY_BASE,
+    opacity:     CFG.LINE_OPACITY,
     depthWrite:  false,
+    blending:    THREE.AdditiveBlending,
   });
 
   linesMesh = new THREE.LineSegments(lineGeo, lineMat);
   scene.add(linesMesh);
 }
 
-function updateLinePositions() {
-  for (let k = 0; k < lineIndices.length; k++) {
-    const i = lineIndices[k];
-    linePositions[k * 3]     = pointPositions[i * 3];
-    linePositions[k * 3 + 1] = pointPositions[i * 3 + 1];
-    linePositions[k * 3 + 2] = 0;
+// ── Differential orbital rotation ─────────────────────────────
+function updateOrbits() {
+  for (let i = 0; i < N; i++) {
+    const r = orbRadius[i];
+    // Inner core spins fast; outer arms slow (Keplerian-ish)
+    const omega = r < 30
+      ? CFG.BASE_OMEGA * 3
+      : CFG.BASE_OMEGA / Math.sqrt(r + 8);
+    orbAngle[i] += omega;
+    positions[i*3]   = r * Math.cos(orbAngle[i]) + dispX[i];
+    positions[i*3+1] = origY[i];
+    positions[i*3+2] = r * Math.sin(orbAngle[i]) + dispZ[i];
   }
 }
 
-// ── Animation Loop ───────────────────────────────────────────
+// ── Mouse gravity well ─────────────────────────────────────────
+function updateMouseGravity() {
+  if (!hasMouse) return;
+  const R2 = CFG.MOUSE_RADIUS * CFG.MOUSE_RADIUS;
+
+  for (let i = 0; i < N; i++) {
+    const px = positions[i*3];
+    const pz = positions[i*3+2];
+    const dx = mouseWorldX - px;
+    const dz = mouseWorldZ - pz;
+    const d2 = dx*dx + dz*dz;
+
+    if (d2 < R2 && d2 > 0.01) {
+      const d   = Math.sqrt(d2);
+      const inf = 1 - d / CFG.MOUSE_RADIUS;
+      const f   = inf * inf * CFG.MOUSE_GRAVITY * 0.018;
+      velX[i] += (dx / d) * f;
+      velZ[i] += (dz / d) * f;
+    }
+
+    // Spring restore toward zero displacement
+    velX[i] += -dispX[i] * 0.04;
+    velZ[i] += -dispZ[i] * 0.04;
+    // Damping
+    velX[i] *= CFG.GRAVITY_DAMPING;
+    velZ[i] *= CFG.GRAVITY_DAMPING;
+    dispX[i] += velX[i];
+    dispZ[i] += velZ[i];
+  }
+}
+
+// ── Sync line buffer from particle positions ───────────────────
+function updateLinePositions() {
+  const lc = lineIndexPairs.length / 2;
+  for (let l = 0; l < lc; l++) {
+    const i = lineIndexPairs[l*2], j = lineIndexPairs[l*2+1];
+    linePositions[l*6]   = positions[i*3];
+    linePositions[l*6+1] = positions[i*3+1];
+    linePositions[l*6+2] = positions[i*3+2];
+    linePositions[l*6+3] = positions[j*3];
+    linePositions[l*6+4] = positions[j*3+1];
+    linePositions[l*6+5] = positions[j*3+2];
+  }
+  linesMesh.geometry.attributes.position.needsUpdate = true;
+}
+
+// ── Mouse → galaxy plane projection ───────────────────────────
+function onMouseMove(e) {
+  hasMouse = true;
+  const ndcX =  (e.clientX / window.innerWidth)  * 2 - 1;
+  const ndcY = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
+  if (raycaster.ray.intersectPlane(galaxyPlane, intersectPt)) {
+    mouseWorldX = intersectPt.x;
+    mouseWorldZ = intersectPt.z;
+  }
+}
+
+// ── Main animation loop ────────────────────────────────────────
 function animate() {
-  updatePhysics();
-  updatePulse();
-  updateLinePositions();
-
-  linesMesh.geometry.attributes.position.needsUpdate  = true;
+  camAngle += CFG.CAM_ORBIT_SPEED;
+  setCameraPosition();
+  updateOrbits();
+  updateMouseGravity();
   pointsMesh.geometry.attributes.position.needsUpdate = true;
-
+  updateLinePositions();
   renderer.render(scene, camera);
 }
 
-// ── Spring Physics for Points ────────────────────────────────
-function updatePhysics() {
-  for (let i = 0; i < N; i++) {
-    const cx = pointPositions[i * 3];
-    const cy = pointPositions[i * 3 + 1];
-
-    // Restore spring toward origin
-    let fx = (origX[i] - cx) * CFG.SPRING_STIFFNESS;
-    let fy = (origY[i] - cy) * CFG.SPRING_STIFFNESS;
-
-    // Mouse repulsion
-    const dx = cx - mouseWorldX;
-    const dy = cy - mouseWorldY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-
-    if (dist < CFG.MOUSE_RADIUS && dist > 0.01) {
-      const influence = (1 - dist / CFG.MOUSE_RADIUS);
-      const force = influence * influence * CFG.MOUSE_STRENGTH;
-      fx += (dx / dist) * force * 0.12;
-      fy += (dy / dist) * force * 0.12;
-    }
-
-    // Integrate velocity
-    velX[i] = (velX[i] + fx) * CFG.SPRING_DAMPING;
-    velY[i] = (velY[i] + fy) * CFG.SPRING_DAMPING;
-
-    pointPositions[i * 3]     = cx + velX[i];
-    pointPositions[i * 3 + 1] = cy + velY[i];
-  }
-}
-
-// ── Heartbeat Pulse ──────────────────────────────────────────
-function triggerPulse() {
-  pulseActive    = true;
-  pulseStartTime = performance.now();
-
-  // Compute grid width for speed calculation
-  const vFOV = (camera.fov * Math.PI) / 180;
-  const viewH = 2 * Math.tan(vFOV / 2) * CFG.CAM_Z;
-  const viewW = viewH * camera.aspect;
-  pulseOriginX = -(viewW * 0.52);
-}
-
-function updatePulse() {
-  if (!pulseActive) {
-    linesMesh.material.opacity = CFG.LINE_OPACITY_BASE;
-    return;
-  }
-
-  const elapsed  = performance.now() - pulseStartTime;
-  const progress = elapsed / CFG.HEARTBEAT_DURATION;
-
-  if (progress >= 1) {
-    pulseActive = false;
-    linesMesh.material.opacity = CFG.LINE_OPACITY_BASE;
-    return;
-  }
-
-  // Wave front X position
-  const vFOV = (camera.fov * Math.PI) / 180;
-  const viewH = 2 * Math.tan(vFOV / 2) * CFG.CAM_Z;
-  const viewW = viewH * camera.aspect;
-  const waveX = pulseOriginX + progress * viewW * 1.1;
-
-  // Global opacity boost — peaks mid-pulse with a smooth bell
-  const bell = Math.sin(progress * Math.PI);
-  linesMesh.material.opacity = CFG.LINE_OPACITY_BASE + bell * 0.22;
-  linesMesh.material.color.setHex(
-    progress < 0.5 ? CFG.LINE_COLOR : CFG.LINE_COLOR_PULSE
-  );
-
-  // Point brightness wave
-  const ptOpacity = CFG.POINT_OPACITY + bell * 0.25;
-  pointsMesh.material.opacity = Math.min(ptOpacity, 0.95);
-
-  // Gently push points near the wave front
-  const WAVE_HALF = 80;
-  for (let i = 0; i < N; i++) {
-    const px = origX[i];
-    const distToWave = Math.abs(px - waveX);
-    if (distToWave < WAVE_HALF) {
-      const waveFactor = (1 - distToWave / WAVE_HALF) * 6;
-      velY[i] += Math.sin(elapsed * 0.008) * waveFactor * 0.3;
-    }
-  }
-}
-
-// ── Mouse / Touch ────────────────────────────────────────────
-function onMouseMove(e) {
-  mouseWorldX = ((e.clientX / window.innerWidth)  * 2 - 1) * getViewHalfW();
-  mouseWorldY = (-(e.clientY / window.innerHeight) * 2 + 1) * getViewHalfH();
-}
-
-function onTouchMove(e) {
-  if (!e.touches.length) return;
-  const t = e.touches[0];
-  mouseWorldX = ((t.clientX / window.innerWidth)  * 2 - 1) * getViewHalfW();
-  mouseWorldY = (-(t.clientY / window.innerHeight) * 2 + 1) * getViewHalfH();
-}
-
-function getViewHalfW() {
-  const vFOV = (camera.fov * Math.PI) / 180;
-  const viewH = 2 * Math.tan(vFOV / 2) * CFG.CAM_Z;
-  return (viewH * camera.aspect) / 2;
-}
-
-function getViewHalfH() {
-  const vFOV = (camera.fov * Math.PI) / 180;
-  return (2 * Math.tan(vFOV / 2) * CFG.CAM_Z) / 2;
-}
-
-// ── Resize ───────────────────────────────────────────────────
+// ── Resize ─────────────────────────────────────────────────────
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-
-  // Rebuild grid to match new viewport dimensions
-  scene.remove(pointsMesh);
-  scene.remove(linesMesh);
-  pointsMesh.geometry.dispose();
-  linesMesh.geometry.dispose();
-  buildGrid();
 }
