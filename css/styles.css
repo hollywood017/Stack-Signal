@@ -584,6 +584,14 @@ h1, h2, h3 {
   gap: 12px;
 }
 
+/* Anchor-wrapped bento cards */
+a.bento-link {
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+}
+
 .bento-card {
   background: var(--glass-bg);
   backdrop-filter: blur(12px);
