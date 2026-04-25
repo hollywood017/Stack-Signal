@@ -302,30 +302,21 @@ function initParticleScroll() {
   const sections = document.querySelectorAll('[data-particle-section]');
   if (!sections.length) return;
 
-  // Track the ordered list so we can revert on scroll-up
-  const sectionList = Array.from(sections);
-
+  // Center-band trigger: fires whenever any section's content sits in
+  // the middle 40% of the viewport. Works on tall mobile sections where
+  // a threshold-based observer would never reach 25% intersection ratio.
   const observer = new IntersectionObserver(
     entries => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
-          const key = entry.target.dataset.particleSection;
-          particleSystem.morphTo(key);
-        } else {
-          // On leaving upward, revert to previous section's formation
-          const idx = sectionList.indexOf(entry.target);
-          if (idx > 0) {
-            const prevKey = sectionList[idx - 1].dataset.particleSection;
-            // Only revert if we're scrolling back up (boundingRect top > 0)
-            const rect = entry.target.getBoundingClientRect();
-            if (rect.top > 0) {
-              particleSystem.morphTo(prevKey);
-            }
-          }
+          particleSystem.morphTo(entry.target.dataset.particleSection);
         }
       });
     },
-    { threshold: 0.25 }
+    {
+      rootMargin: '-30% 0px -30% 0px',
+      threshold: 0,
+    }
   );
 
   sections.forEach(s => observer.observe(s));

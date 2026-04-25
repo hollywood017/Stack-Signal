@@ -10,9 +10,13 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { GPUComputationRenderer } from 'three/addons/misc/GPUComputationRenderer.js';
 
 // ── Device detection ──────────────────────────────────────────
-const IS_MOBILE  = navigator.maxTouchPoints > 0 && window.innerWidth < 1024;
-const GPGPU_SIZE = IS_MOBILE ? 64 : 512;
-const N          = GPGPU_SIZE * GPGPU_SIZE; // total particle count
+// Catches phones AND tablets (iPad in any orientation, Surface, etc.).
+// 1280px breakpoint covers iPad Pro 12.9" landscape (1366×1024).
+const IS_MOBILE  = navigator.maxTouchPoints > 0 && window.innerWidth < 1280;
+const IS_TOUCH   = navigator.maxTouchPoints > 0 &&
+                   !window.matchMedia('(hover: hover)').matches;
+const GPGPU_SIZE = IS_MOBILE ? 128 : 512;   // 16,384 mobile / 262,144 desktop
+const N          = GPGPU_SIZE * GPGPU_SIZE;
 
 // ── Brand colours ─────────────────────────────────────────────
 const C = {
@@ -85,7 +89,7 @@ const particleVS = /* glsl */`
 
     // Size attenuation
     gl_PointSize = uSize * ( 500.0 / max( -mvPos.z, 1.0 ) );
-    gl_PointSize = clamp( gl_PointSize, 0.4, 7.0 );
+    gl_PointSize = clamp( gl_PointSize, 0.4, 9.0 );
 
     // Depth fade for very near / very far particles
     float cd = -mvPos.z;
@@ -223,9 +227,9 @@ function genServices() {
   for (let i = 0; i < N; i++) {
     const ci = Math.min(Math.floor(i / perC), 2);
     const c  = centers[ci];
-    p[i * 3]     = c.x + rndN() * 65;
-    p[i * 3 + 1] = c.y + rndN() * 50;
-    p[i * 3 + 2] = c.z + rndN() * 65;
+    p[i * 3]     = c.x + rndN() * 50;
+    p[i * 3 + 1] = c.y + rndN() * 40;
+    p[i * 3 + 2] = c.z + rndN() * 50;
   }
   return p;
 }
@@ -299,7 +303,7 @@ function genContact() {
     const t    = frac * Math.PI * 10;  // 5 full turns
     const r    = (1 - frac) * 360;
     p[i * 3]     = Math.cos(t) * r;
-    p[i * 3 + 1] = (frac - 0.5) * 220 + rnd(-10, 10);
+    p[i * 3 + 1] = (frac - 0.5) * 280 + rnd(-10, 10);
     p[i * 3 + 2] = Math.sin(t) * r;
   }
   return p;
@@ -344,7 +348,15 @@ export function initThreeBg() {
   // ── Post-processing ──────────────────────────────────────────
   composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  if (!IS_MOBILE) {
+  if (IS_MOBILE) {
+    // Half-res bloom on mobile — biggest "premium feel" lever on small screens.
+    composer.addPass(new UnrealBloomPass(
+      new THREE.Vector2(innerWidth * 0.5, innerHeight * 0.5),
+      1.0,   // strength
+      0.5,   // radius
+      0.15   // threshold
+    ));
+  } else {
     composer.addPass(new UnrealBloomPass(
       new THREE.Vector2(innerWidth, innerHeight),
       1.4,   // strength
@@ -412,7 +424,7 @@ export function initThreeBg() {
       uPosTex:      { value: null },
       uColorA:      { value: colorA },
       uColorB:      { value: colorB },
-      uSize:        { value: IS_MOBILE ? 1.8 : 2.2 },
+      uSize:        { value: IS_MOBILE ? 2.4 : 2.2 },
       uMouseWorld:  { value: mouseWorld },
       uMouseRadius: { value: 180.0 },
     },
@@ -433,25 +445,32 @@ export function initThreeBg() {
   setTimeout(() => particleSystem.morphTo('hero'), 2000);
 
   // ── Mouse repulsion ───────────────────────────────────────────
-  window.addEventListener('mousemove', e => {
-    mouseNDC.x =  (e.clientX / innerWidth)  * 2 - 1;
-    mouseNDC.y = -(e.clientY / innerHeight) * 2 + 1;
-
-    // Unproject mouse to the z=0 world plane
-    const ray = new THREE.Ray();
-    ray.origin.setFromMatrixPosition(camera.matrixWorld);
-    ray.direction.set(mouseNDC.x, mouseNDC.y, 0.5)
-      .unproject(camera)
-      .sub(ray.origin)
-      .normalize();
-    const t = -ray.origin.z / ray.direction.z;
-    mouseWorld.set(
-      ray.origin.x + ray.direction.x * t,
-      ray.origin.y + ray.direction.y * t,
-      0
-    );
+  if (IS_TOUCH) {
+    // No hover cursor — park the repulsion sphere far off-stage so it
+    // doesn't carve a permanent hole in the centre of every formation.
+    mouseWorld.set(99999, 99999, 99999);
     renderMesh.material.uniforms.uMouseWorld.value.copy(mouseWorld);
-  }, { passive: true });
+  } else {
+    window.addEventListener('mousemove', e => {
+      mouseNDC.x =  (e.clientX / innerWidth)  * 2 - 1;
+      mouseNDC.y = -(e.clientY / innerHeight) * 2 + 1;
+
+      // Unproject mouse to the z=0 world plane
+      const ray = new THREE.Ray();
+      ray.origin.setFromMatrixPosition(camera.matrixWorld);
+      ray.direction.set(mouseNDC.x, mouseNDC.y, 0.5)
+        .unproject(camera)
+        .sub(ray.origin)
+        .normalize();
+      const t = -ray.origin.z / ray.direction.z;
+      mouseWorld.set(
+        ray.origin.x + ray.direction.x * t,
+        ray.origin.y + ray.direction.y * t,
+        0
+      );
+      renderMesh.material.uniforms.uMouseWorld.value.copy(mouseWorld);
+    }, { passive: true });
+  }
 
   // ── Resize ────────────────────────────────────────────────────
   window.addEventListener('resize', () => {
@@ -490,10 +509,12 @@ function animate() {
   renderMesh.material.uniforms.uColorA.value.copy(colorA);
   renderMesh.material.uniforms.uColorB.value.copy(colorB);
 
-  // Camera gentle parallax following mouse
-  camera.position.x += (mouseNDC.x * 28  - camera.position.x) * 0.025;
-  camera.position.y += (mouseNDC.y * 18 + 80 - camera.position.y) * 0.025;
-  camera.lookAt(0, 0, 0);
+  // Camera gentle parallax following mouse (desktop only)
+  if (!IS_TOUCH) {
+    camera.position.x += (mouseNDC.x * 28  - camera.position.x) * 0.025;
+    camera.position.y += (mouseNDC.y * 18 + 80 - camera.position.y) * 0.025;
+    camera.lookAt(0, 0, 0);
+  }
 
   composer.render();
 }
