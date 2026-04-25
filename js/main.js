@@ -4,11 +4,12 @@
  * counter animation, custom cursor, smooth scroll.
  */
 
-import { initThreeBg } from './three-bg.js';
+import { initThreeBg, particleSystem } from './three-bg.js';
 
 // ── Boot ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   initThreeBg();
+  initParticleScroll();
   initNavScroll();
   initMobileNav();
   initMagneticButtons();
@@ -296,7 +297,41 @@ function initCustomCursor() {
   });
 }
 
-// ── 9. Scroll Reveal Cards ───────────────────────────────────
+// ── 9. Particle Scroll Morphing ──────────────────────────────
+function initParticleScroll() {
+  const sections = document.querySelectorAll('[data-particle-section]');
+  if (!sections.length) return;
+
+  // Track the ordered list so we can revert on scroll-up
+  const sectionList = Array.from(sections);
+
+  const observer = new IntersectionObserver(
+    entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const key = entry.target.dataset.particleSection;
+          particleSystem.morphTo(key);
+        } else {
+          // On leaving upward, revert to previous section's formation
+          const idx = sectionList.indexOf(entry.target);
+          if (idx > 0) {
+            const prevKey = sectionList[idx - 1].dataset.particleSection;
+            // Only revert if we're scrolling back up (boundingRect top > 0)
+            const rect = entry.target.getBoundingClientRect();
+            if (rect.top > 0) {
+              particleSystem.morphTo(prevKey);
+            }
+          }
+        }
+      });
+    },
+    { threshold: 0.25 }
+  );
+
+  sections.forEach(s => observer.observe(s));
+}
+
+// ── 10. Scroll Reveal Cards ───────────────────────────────────
 function initScrollRevealCards() {
   const cards = document.querySelectorAll(
     '.service-card, .bento-card, .pricing-card, .process-step, .tech-item'

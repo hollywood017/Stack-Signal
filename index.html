@@ -42,7 +42,12 @@
 
   <!-- Three.js importmap -->
   <script type="importmap">
-    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.min.js" } }
+    {
+      "imports": {
+        "three":          "https://unpkg.com/three@0.160.0/build/three.module.min.js",
+        "three/addons/":  "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
   </script>
 
   <!-- Custom CSS -->
@@ -102,7 +107,7 @@
 <!-- ════════════════════════════════════════════════════════
      HERO
 ════════════════════════════════════════════════════════ -->
-<section id="hero">
+<section id="hero" data-particle-section="hero">
   <div class="hero-overlay" aria-hidden="true"></div>
 
   <div class="hero-content">
@@ -143,7 +148,7 @@
 <!-- ════════════════════════════════════════════════════════
      SERVICES
 ════════════════════════════════════════════════════════ -->
-<section id="services">
+<section id="services" data-particle-section="services">
   <div class="section-inner">
     <p class="section-label">// What I Build</p>
     <h2 class="section-title reveal-text">Three Pillars.<br>Zero Fluff.</h2>
@@ -231,7 +236,7 @@
 <!-- ════════════════════════════════════════════════════════
      STATS
 ════════════════════════════════════════════════════════ -->
-<section id="stats">
+<section id="stats" data-particle-section="stats">
   <div class="section-inner" style="padding-top: 0; padding-bottom: 0;">
     <div class="stats-grid">
       <div class="stat-item">
@@ -263,7 +268,7 @@
 <!-- ════════════════════════════════════════════════════════
      PORTFOLIO BENTO
 ════════════════════════════════════════════════════════ -->
-<section id="work">
+<section id="work" data-particle-section="portfolio">
   <div class="section-inner">
     <p class="section-label">// Selected Work</p>
     <h2 class="section-title reveal-text">Builds That<br>Move Numbers.</h2>
@@ -340,7 +345,7 @@
 <!-- ════════════════════════════════════════════════════════
      BUILD THE STACK TOGGLE
 ════════════════════════════════════════════════════════ -->
-<section id="build-the-stack">
+<section id="build-the-stack" data-particle-section="flow">
   <div class="section-inner">
     <p class="section-label">// The Tech</p>
     <h2 class="section-title reveal-text">Build the Stack.</h2>
@@ -399,7 +404,7 @@
 <!-- ════════════════════════════════════════════════════════
      PROCESS
 ════════════════════════════════════════════════════════ -->
-<section id="process">
+<section id="process" data-particle-section="grid">
   <div class="section-inner">
     <p class="section-label">// How It Works</p>
     <h2 class="section-title reveal-text">No Guesswork.<br>No Surprises.</h2>
@@ -451,7 +456,7 @@
 <!-- ════════════════════════════════════════════════════════
      PRICING
 ════════════════════════════════════════════════════════ -->
-<section id="pricing">
+<section id="pricing" data-particle-section="grid">
   <div class="section-inner">
     <p class="section-label">// Investment</p>
     <h2 class="section-title reveal-text">Fixed Pricing.<br>Zero Surprises.</h2>
@@ -532,7 +537,7 @@
 <!-- ════════════════════════════════════════════════════════
      CONTACT / CTA
 ════════════════════════════════════════════════════════ -->
-<section id="contact">
+<section id="contact" data-particle-section="contact">
   <div class="section-inner">
     <div class="contact-grid">
 

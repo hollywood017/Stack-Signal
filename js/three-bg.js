@@ -1,357 +1,499 @@
 /**
- * STACK & SIGNAL — Galaxy / Neural Nebula Background
- * ~13,500 particles in 4 logarithmic spiral arms with differential rotation,
- * neural connection lines, mouse gravity well, and slow camera orbit.
+ * STACK & SIGNAL — Neural Manifest GPGPU Particle System
+ * 262,144 GPU-computed particles morph between brand formations as you scroll.
+ * Bloom post-processing, mouse repulsion, auto-play hero cinematic.
  */
 import * as THREE from 'three';
+import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { GPUComputationRenderer } from 'three/addons/misc/GPUComputationRenderer.js';
 
-// ── Configuration ────────────────────────────────────────────
-const CFG = {
-  N_CORE:          900,      // dense bright core cluster
-  N_ARMS:          4,        // spiral arm count
-  N_PER_ARM:       3000,     // particles per arm
-  N_DUST:          1500,     // scattered background dust
-  // TOTAL ≈ 13,500
-  RADIUS_MAX:      420,      // world units — max arm radius
-  SPIRAL_B:        0.22,     // log spiral tightness
-  ARM_SPREAD:      0.38,     // scatter perpendicular to arm (fraction of r)
-  BASE_OMEGA:      0.000055, // base angular velocity (rad/frame)
-  LINE_DIST:       38,       // max world-unit distance for neural connections
-  MAX_LINES:       18000,    // cap line count for GPU budget
-  MOUSE_RADIUS:    180,      // gravity well radius (world units)
-  MOUSE_GRAVITY:   55,       // gravity well strength
-  GRAVITY_DAMPING: 0.88,     // velocity damping for displaced particles
-  CAM_TILT:        0.42,     // radians — camera pitch down
-  CAM_RADIUS:      680,      // camera orbit radius
-  CAM_ORBIT_SPEED: 0.000045, // camera orbit speed (rad/frame)
-  GALAXY_Z_THICK:  18,       // vertical disk scatter
-  POINT_SIZE_BASE: 1.8,
-  LINE_OPACITY:    0.09,
+// ── Device detection ──────────────────────────────────────────
+const IS_MOBILE  = navigator.maxTouchPoints > 0 && window.innerWidth < 1024;
+const GPGPU_SIZE = IS_MOBILE ? 64 : 512;
+const N          = GPGPU_SIZE * GPGPU_SIZE; // total particle count
+
+// ── Brand colours ─────────────────────────────────────────────
+const C = {
+  signal: () => new THREE.Color(0x0057FF),
+  cyan:   () => new THREE.Color(0x00C2FF),
+  burn:   () => new THREE.Color(0xFF4D00),
+  white:  () => new THREE.Color(0xFFFFFF),
 };
 
-// Per-vertex colors (RGB 0–1)
-const CORE_COLOR = [200/255, 232/255, 255/255]; // near-white blue
-const ARM_INNER  = [0,       194/255, 1.0     ]; // electric cyan
-const ARM_OUTER  = [0,       87/255,  1.0     ]; // deep signal blue
-const DUST_COLOR = [0,       24/255,  68/255  ]; // very dark blue
+const SECTION_COLORS = {
+  logo:      [C.signal(), C.cyan()  ],
+  hero:      [C.signal(), C.cyan()  ],
+  services:  [C.cyan(),   C.burn()  ],
+  stats:     [C.cyan(),   C.white() ],
+  portfolio: [C.signal(), C.cyan()  ],
+  flow:      [C.signal(), C.cyan()  ],
+  grid:      [C.signal(), C.cyan()  ],
+  contact:   [C.burn(),   C.white() ],
+};
 
-// ── State ─────────────────────────────────────────────────────
-let renderer, scene, camera;
-let pointsMesh, linesMesh;
-let N = 0;
-let positions;      // Float32Array(N*3) — live XYZ
-let colors;         // Float32Array(N*3) — static per-vertex RGB
-let orbAngle;       // Float32Array(N) — current orbital angle (XZ plane)
-let orbRadius;      // Float32Array(N) — radial distance, constant
-let origY;          // Float32Array(N) — original Y height, constant
-let dispX, dispZ;   // Float32Array(N) — mouse gravity displacement
-let velX, velZ;     // Float32Array(N) — displacement velocity
-let lineIndexPairs; // Int32Array([i,j, i,j, ...])
-let linePositions;  // Float32Array for line segment endpoints
-let camAngle = 0;
-let mouseWorldX = 0, mouseWorldZ = 0;
-let hasMouse = false;
+// ── GPGPU — Position simulation shader ───────────────────────
+const positionSimShader = /* glsl */`
+  uniform sampler2D uTargetPosition;
+  uniform float     uLerpSpeed;
+  uniform float     uTime;
 
-const raycaster   = new THREE.Raycaster();
-const galaxyPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-const intersectPt = new THREE.Vector3();
+  void main() {
+    vec2 uv     = gl_FragCoord.xy / resolution.xy;
+    vec4 pos    = texture2D( texturePosition,  uv );
+    vec4 target = texture2D( uTargetPosition,  uv );
 
-// ── Boot ──────────────────────────────────────────────────────
+    // Smooth lerp toward target
+    vec3 next = mix( pos.xyz, target.xyz, uLerpSpeed );
+
+    // Organic micro-drift: keeps formation alive, not static
+    float n = sin( uTime * 0.28 + uv.x * 53.1 ) * cos( uTime * 0.19 + uv.y * 37.4 );
+    next += vec3( n, n * 0.6, n * 0.4 ) * 0.9;
+
+    gl_FragColor = vec4( next, 1.0 );
+  }
+`;
+
+// ── Render — Vertex shader ────────────────────────────────────
+const particleVS = /* glsl */`
+  uniform sampler2D uPosTex;
+  uniform float     uSize;
+  uniform vec3      uMouseWorld;
+  uniform float     uMouseRadius;
+
+  attribute vec2 aUv;
+
+  varying vec2  vUv;
+  varying float vEdge;   // distance from centre, 0–1
+
+  void main() {
+    vUv = aUv;
+
+    vec3 pos = texture2D( uPosTex, aUv ).xyz;
+
+    // Mouse repulsion (in world space)
+    vec3  diff = pos - uMouseWorld;
+    float d    = length( diff );
+    if ( d < uMouseRadius && d > 0.001 ) {
+      float f = pow( 1.0 - d / uMouseRadius, 2.0 ) * 90.0;
+      pos += normalize( diff ) * f;
+    }
+
+    vec4 mvPos = modelViewMatrix * vec4( pos, 1.0 );
+    gl_Position = projectionMatrix * mvPos;
+
+    // Size attenuation
+    gl_PointSize = uSize * ( 500.0 / max( -mvPos.z, 1.0 ) );
+    gl_PointSize = clamp( gl_PointSize, 0.4, 7.0 );
+
+    // Depth fade for very near / very far particles
+    float cd = -mvPos.z;
+    vEdge = clamp( cd / 600.0, 0.0, 1.0 );
+  }
+`;
+
+// ── Render — Fragment shader ──────────────────────────────────
+const particleFS = /* glsl */`
+  uniform vec3  uColorA;
+  uniform vec3  uColorB;
+
+  varying vec2  vUv;
+  varying float vEdge;
+
+  void main() {
+    vec2  c    = gl_PointCoord - 0.5;
+    float d    = length( c );
+    if ( d > 0.5 ) discard;
+
+    float alpha = smoothstep( 0.5, 0.04, d );
+
+    // Per-particle colour blend (deterministic from UV)
+    float t     = fract( vUv.x * 17.3 + vUv.y * 9.1 );
+    vec3  color = mix( uColorA, uColorB, t );
+
+    // Bright glow core
+    color += vec3( 0.18 ) * ( 1.0 - d * 2.0 );
+
+    gl_FragColor = vec4( color, alpha * vEdge * 0.88 );
+  }
+`;
+
+// ── Module state ──────────────────────────────────────────────
+let renderer, scene, camera, composer;
+let gpuCompute, posVar;
+let renderMesh;
+let targetTextures = {};
+let colorA = new THREE.Color(0x0057FF);
+let colorB = new THREE.Color(0x00C2FF);
+let targetA = new THREE.Color(0x0057FF);
+let targetB = new THREE.Color(0x00C2FF);
+let mouseWorld = new THREE.Vector3();
+let mouseNDC   = new THREE.Vector2();
+const clock    = new THREE.Clock();
+
+// ── Helpers ───────────────────────────────────────────────────
+const rnd  = (lo, hi) => lo + Math.random() * (hi - lo);
+const rndN = () => {
+  let u = 0, v = 0;
+  while (!u) u = Math.random();
+  while (!v) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+};
+
+function makeTargetTex(positions) {
+  // positions: Float32Array length N*3
+  const data = new Float32Array(N * 4);
+  for (let i = 0; i < N; i++) {
+    data[i * 4]     = positions[i * 3];
+    data[i * 4 + 1] = positions[i * 3 + 1];
+    data[i * 4 + 2] = positions[i * 3 + 2];
+    data[i * 4 + 3] = 1.0;
+  }
+  const tex = new THREE.DataTexture(data, GPGPU_SIZE, GPGPU_SIZE, THREE.RGBAFormat, THREE.FloatType);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// ── Formation generators ──────────────────────────────────────
+
+// Hero — Signal Pulse: concentric rings radiating outward
+function genHero() {
+  const p = new Float32Array(N * 3);
+  const rings = 14;
+  const perRing = Math.floor(N / rings);
+  for (let r = 0; r < rings; r++) {
+    const radius = 30 + r * 24;
+    const count  = Math.min(perRing, N - r * perRing);
+    for (let i = 0; i < count; i++) {
+      const idx   = r * perRing + i;
+      const angle = (i / count) * Math.PI * 2;
+      const jx    = rnd(-6, 6), jz = rnd(-6, 6);
+      p[idx * 3]     = Math.cos(angle) * radius + jx;
+      p[idx * 3 + 1] = rnd(-12, 12) * (1 - r / rings * 0.6);
+      p[idx * 3 + 2] = Math.sin(angle) * radius + jz;
+    }
+  }
+  return p;
+}
+
+// Logo — S&S icon: 3 stacked bars + 2 signal arcs
+function genLogo() {
+  const p    = new Float32Array(N * 3);
+  const bars = [ { y: 70, w: 190 }, { y: 0, w: 140 }, { y: -70, w: 95 } ];
+  const barN = Math.floor(N * 0.58);
+  const arcN = N - barN;
+  const perBar = Math.floor(barN / 3);
+  let idx = 0;
+
+  bars.forEach((bar, bi) => {
+    const count = bi < 2 ? perBar : barN - 2 * perBar;
+    for (let i = 0; i < count && idx < N; i++, idx++) {
+      p[idx * 3]     = rnd(-bar.w / 2, bar.w / 2);
+      p[idx * 3 + 1] = bar.y + rnd(-5, 5);
+      p[idx * 3 + 2] = bi * 4 + rnd(-3, 3);
+    }
+  });
+
+  // Two signal arcs on the right
+  const arcRadii = [108, 150];
+  const perArc   = Math.floor(arcN / 2);
+  arcRadii.forEach((radius, ai) => {
+    const count = ai === 0 ? perArc : arcN - perArc;
+    for (let i = 0; i < count && idx < N; i++, idx++) {
+      const t = (i / count) * Math.PI * 0.85 - Math.PI * 0.425;
+      p[idx * 3]     = 120 + Math.cos(t) * radius;
+      p[idx * 3 + 1] = Math.sin(t) * radius;
+      p[idx * 3 + 2] = rnd(-4, 4);
+    }
+  });
+
+  return p;
+}
+
+// Services — 3 gaussian clusters, one per service
+function genServices() {
+  const p = new Float32Array(N * 3);
+  const centers = [
+    { x: -210, y: 50,  z: 20  },
+    { x:  0,   y: -60, z: 60  },
+    { x:  210, y: 50,  z: -30 },
+  ];
+  const perC = Math.floor(N / 3);
+  for (let i = 0; i < N; i++) {
+    const ci = Math.min(Math.floor(i / perC), 2);
+    const c  = centers[ci];
+    p[i * 3]     = c.x + rndN() * 65;
+    p[i * 3 + 1] = c.y + rndN() * 50;
+    p[i * 3 + 2] = c.z + rndN() * 65;
+  }
+  return p;
+}
+
+// Stats — explosion burst: random sphere
+function genStats() {
+  const p = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi   = Math.acos(2 * Math.random() - 1);
+    const r     = rnd(100, 460);
+    p[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
+    p[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.55;
+    p[i * 3 + 2] = r * Math.cos(phi);
+  }
+  return p;
+}
+
+// Portfolio — tight 3D grid matrix
+function genPortfolio() {
+  const p    = new Float32Array(N * 3);
+  const side = Math.ceil(Math.cbrt(N));
+  const sp   = 340 / side;
+  let idx    = 0;
+  outer: for (let z = 0; z < side; z++) {
+    for (let y = 0; y < side; y++) {
+      for (let x = 0; x < side && idx < N; x++, idx++) {
+        p[idx * 3]     = (x - side / 2) * sp + rnd(-sp * 0.12, sp * 0.12);
+        p[idx * 3 + 1] = (y - side / 2) * sp * 0.75 + rnd(-2, 2);
+        p[idx * 3 + 2] = (z - side / 2) * sp * 0.35;
+      }
+      if (idx >= N) break outer;
+    }
+  }
+  return p;
+}
+
+// Process/flow — sine-wave stream left to right
+function genFlow() {
+  const p = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const t = (i / N) * Math.PI * 4;
+    const x = (i / N - 0.5) * 620;
+    p[i * 3]     = x + rnd(-18, 18);
+    p[i * 3 + 1] = Math.sin(t) * 70 + rnd(-22, 22);
+    p[i * 3 + 2] = rnd(-50, 50);
+  }
+  return p;
+}
+
+// Pricing — flat dense plane
+function genGrid() {
+  const p    = new Float32Array(N * 3);
+  const side = Math.ceil(Math.sqrt(N));
+  const sp   = 360 / side;
+  for (let i = 0; i < N; i++) {
+    const x = (i % side) - side / 2;
+    const y = Math.floor(i / side) - side / 2;
+    p[i * 3]     = x * sp + rnd(-sp * 0.18, sp * 0.18);
+    p[i * 3 + 1] = y * sp * 0.45 + rnd(-3, 3);
+    p[i * 3 + 2] = rnd(-25, 25);
+  }
+  return p;
+}
+
+// Contact — vortex spiral collapsing to centre
+function genContact() {
+  const p = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const frac = i / N;
+    const t    = frac * Math.PI * 10;  // 5 full turns
+    const r    = (1 - frac) * 360;
+    p[i * 3]     = Math.cos(t) * r;
+    p[i * 3 + 1] = (frac - 0.5) * 220 + rnd(-10, 10);
+    p[i * 3 + 2] = Math.sin(t) * r;
+  }
+  return p;
+}
+
+// ── Public API ────────────────────────────────────────────────
+export const particleSystem = {
+  morphTo(key) {
+    if (!posVar || !targetTextures[key]) return;
+    posVar.material.uniforms.uTargetPosition.value = targetTextures[key];
+    const [ca, cb] = SECTION_COLORS[key] ?? SECTION_COLORS.hero;
+    targetA.copy(ca);
+    targetB.copy(cb);
+  },
+};
+
+// ── Init ──────────────────────────────────────────────────────
 export function initThreeBg() {
   const canvas = document.getElementById('bg-canvas');
   if (!canvas) return;
 
+  // WebGL2 required for GPGPU float textures
+  if (!canvas.getContext('webgl2')) {
+    document.body.style.background = '#060D1A';
+    return;
+  }
+
+  // ── Renderer ────────────────────────────────────────────────
   renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, IS_MOBILE ? 1 : 1.5));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.toneMapping        = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
 
-  scene = new THREE.Scene();
+  // ── Scene & Camera ───────────────────────────────────────────
+  scene  = new THREE.Scene();
   scene.background = new THREE.Color(0x060D1A);
-
-  camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 3000);
-  setCameraPosition();
-
-  buildGalaxy();
-
-  window.addEventListener('resize',    onResize,    { passive: true });
-  window.addEventListener('mousemove', onMouseMove, { passive: true });
-
-  renderer.setAnimationLoop(animate);
-}
-
-// ── Camera orbit ──────────────────────────────────────────────
-function setCameraPosition() {
-  const hDist = CFG.CAM_RADIUS * Math.cos(CFG.CAM_TILT);
-  camera.position.set(
-    Math.sin(camAngle) * hDist,
-    Math.sin(CFG.CAM_TILT) * CFG.CAM_RADIUS,
-    Math.cos(camAngle) * hDist
-  );
+  camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 1, 3000);
+  camera.position.set(0, 80, 600);
   camera.lookAt(0, 0, 0);
-}
 
-// ── Build galaxy ──────────────────────────────────────────────
-function buildGalaxy() {
-  const N_ARM_TOTAL = CFG.N_ARMS * CFG.N_PER_ARM;
-  N = CFG.N_CORE + N_ARM_TOTAL + CFG.N_DUST;
-
-  positions = new Float32Array(N * 3);
-  colors    = new Float32Array(N * 3);
-  orbAngle  = new Float32Array(N);
-  orbRadius = new Float32Array(N);
-  origY     = new Float32Array(N);
-  dispX     = new Float32Array(N);
-  dispZ     = new Float32Array(N);
-  velX      = new Float32Array(N);
-  velZ      = new Float32Array(N);
-
-  let idx = 0;
-
-  // ── Core: Box-Muller gaussian cluster ──
-  for (let i = 0; i < CFG.N_CORE; i++, idx++) {
-    const u   = Math.random() + 1e-9;
-    const mag = Math.sqrt(-2 * Math.log(u)) * 28;
-    const th  = 2 * Math.PI * Math.random();
-    const x   = mag * Math.cos(th);
-    const z   = mag * Math.sin(th);
-    const y   = (Math.random() - 0.5) * 24;
-    positions[idx*3]   = x;
-    positions[idx*3+1] = y;
-    positions[idx*3+2] = z;
-    orbAngle[idx]  = Math.atan2(z, x);
-    orbRadius[idx] = Math.sqrt(x*x + z*z);
-    origY[idx]     = y;
-    colors[idx*3]   = CORE_COLOR[0];
-    colors[idx*3+1] = CORE_COLOR[1];
-    colors[idx*3+2] = CORE_COLOR[2];
+  // ── Post-processing ──────────────────────────────────────────
+  composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  if (!IS_MOBILE) {
+    composer.addPass(new UnrealBloomPass(
+      new THREE.Vector2(innerWidth, innerHeight),
+      1.4,   // strength
+      0.4,   // radius
+      0.08   // threshold
+    ));
   }
 
-  // ── Arms: logarithmic spiral ──
-  const expMax = Math.exp(CFG.SPIRAL_B * 4.5 * Math.PI) - 1;
-  for (let arm = 0; arm < CFG.N_ARMS; arm++) {
-    const armOff = (arm / CFG.N_ARMS) * 2 * Math.PI;
-    for (let i = 0; i < CFG.N_PER_ARM; i++, idx++) {
-      const t       = 0.001 + Math.random() * 0.999;
-      const angle   = t * 4.5 * Math.PI;
-      const r       = ((Math.exp(CFG.SPIRAL_B * angle) - 1) / expMax) * CFG.RADIUS_MAX;
-      const scatter = (Math.random() - 0.5) * CFG.ARM_SPREAD * r;
-      const totalA  = angle + armOff;
-      const x = (r + scatter) * Math.cos(totalA);
-      const z = (r + scatter) * Math.sin(totalA);
-      const y = (Math.random() - 0.5) * CFG.GALAXY_Z_THICK;
-      positions[idx*3]   = x;
-      positions[idx*3+1] = y;
-      positions[idx*3+2] = z;
-      orbAngle[idx]  = Math.atan2(z, x);
-      orbRadius[idx] = Math.sqrt(x*x + z*z);
-      origY[idx]     = y;
-      // Color lerp INNER→OUTER by radius fraction
-      const frac = Math.min(r / CFG.RADIUS_MAX, 1);
-      colors[idx*3]   = ARM_INNER[0] + (ARM_OUTER[0] - ARM_INNER[0]) * frac;
-      colors[idx*3+1] = ARM_INNER[1] + (ARM_OUTER[1] - ARM_INNER[1]) * frac;
-      colors[idx*3+2] = ARM_INNER[2] + (ARM_OUTER[2] - ARM_INNER[2]) * frac;
+  // ── GPGPU ────────────────────────────────────────────────────
+  gpuCompute = new GPUComputationRenderer(GPGPU_SIZE, GPGPU_SIZE, renderer);
+
+  // Initial positions: loose scatter
+  const initPos = gpuCompute.createTexture();
+  const d = initPos.image.data;
+  for (let i = 0; i < N; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi   = Math.acos(2 * Math.random() - 1);
+    const r     = rnd(80, 320);
+    d[i * 4]     = r * Math.sin(phi) * Math.cos(theta);
+    d[i * 4 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.3;
+    d[i * 4 + 2] = r * Math.cos(phi);
+    d[i * 4 + 3] = 1.0;
+  }
+
+  posVar = gpuCompute.addVariable('texturePosition', positionSimShader, initPos);
+  gpuCompute.setVariableDependencies(posVar, [posVar]);
+  posVar.material.uniforms.uTargetPosition = { value: null };
+  posVar.material.uniforms.uLerpSpeed      = { value: 0.028 };
+  posVar.material.uniforms.uTime           = { value: 0.0 };
+
+  const err = gpuCompute.init();
+  if (err) { console.error('GPGPU init error:', err); return; }
+
+  // ── Pre-compute all target formations ────────────────────────
+  targetTextures = {
+    hero:      makeTargetTex(genHero()),
+    logo:      makeTargetTex(genLogo()),
+    services:  makeTargetTex(genServices()),
+    stats:     makeTargetTex(genStats()),
+    portfolio: makeTargetTex(genPortfolio()),
+    flow:      makeTargetTex(genFlow()),
+    grid:      makeTargetTex(genGrid()),
+    contact:   makeTargetTex(genContact()),
+  };
+
+  // Start with logo formation
+  posVar.material.uniforms.uTargetPosition.value = targetTextures.logo;
+
+  // ── Render mesh ───────────────────────────────────────────────
+  // One UV attribute per particle so the vertex shader knows which texel to read
+  const uvArr = new Float32Array(N * 2);
+  for (let i = 0; i < GPGPU_SIZE; i++) {
+    for (let j = 0; j < GPGPU_SIZE; j++) {
+      const k = (i * GPGPU_SIZE + j) * 2;
+      uvArr[k]     = (j + 0.5) / GPGPU_SIZE;
+      uvArr[k + 1] = (i + 0.5) / GPGPU_SIZE;
     }
   }
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('aUv', new THREE.BufferAttribute(uvArr, 2));
+  geom.setDrawRange(0, N);
 
-  // ── Dust: uniform disk ──
-  for (let i = 0; i < CFG.N_DUST; i++, idx++) {
-    const ang = Math.random() * 2 * Math.PI;
-    const r   = Math.sqrt(Math.random()) * CFG.RADIUS_MAX * 1.3;
-    const x   = r * Math.cos(ang);
-    const z   = r * Math.sin(ang);
-    const y   = (Math.random() - 0.5) * CFG.GALAXY_Z_THICK * 2;
-    positions[idx*3]   = x;
-    positions[idx*3+1] = y;
-    positions[idx*3+2] = z;
-    orbAngle[idx]  = ang;
-    orbRadius[idx] = r;
-    origY[idx]     = y;
-    colors[idx*3]   = DUST_COLOR[0];
-    colors[idx*3+1] = DUST_COLOR[1];
-    colors[idx*3+2] = DUST_COLOR[2];
-  }
-
-  // Points geometry
-  const ptGeo = new THREE.BufferGeometry();
-  ptGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  ptGeo.setAttribute('color',    new THREE.BufferAttribute(colors, 3));
-
-  const ptMat = new THREE.PointsMaterial({
-    vertexColors:    true,
-    size:            CFG.POINT_SIZE_BASE,
-    sizeAttenuation: true,
-    transparent:     true,
-    opacity:         0.85,
-    depthWrite:      false,
-    blending:        THREE.AdditiveBlending,
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uPosTex:      { value: null },
+      uColorA:      { value: colorA },
+      uColorB:      { value: colorB },
+      uSize:        { value: IS_MOBILE ? 1.8 : 2.2 },
+      uMouseWorld:  { value: mouseWorld },
+      uMouseRadius: { value: 180.0 },
+    },
+    vertexShader:   particleVS,
+    fragmentShader: particleFS,
+    blending:       THREE.AdditiveBlending,
+    depthWrite:     false,
+    transparent:    true,
   });
 
-  pointsMesh = new THREE.Points(ptGeo, ptMat);
-  scene.add(pointsMesh);
+  renderMesh = new THREE.Points(geom, mat);
+  scene.add(renderMesh);
 
-  buildLines();
-}
+  // ── Hero cinematic auto-play ──────────────────────────────────
+  // Phase 1 (0s):      logo forms
+  // Phase 2 (2.0s):    morph to signal-pulse hero rings
+  // Phase 3 (4.0s):    stay — scroll takes over from here
+  setTimeout(() => particleSystem.morphTo('hero'), 2000);
 
-// ── Build neural lines via spatial grid bucketing ─────────────
-function buildLines() {
-  const lineN  = CFG.N_CORE + CFG.N_ARMS * CFG.N_PER_ARM; // skip dust
-  const cs     = CFG.LINE_DIST;
-  const distSq = cs * cs;
-  const grid   = new Map();
+  // ── Mouse repulsion ───────────────────────────────────────────
+  window.addEventListener('mousemove', e => {
+    mouseNDC.x =  (e.clientX / innerWidth)  * 2 - 1;
+    mouseNDC.y = -(e.clientY / innerHeight) * 2 + 1;
 
-  // Bucket particles into grid cells
-  for (let i = 0; i < lineN; i++) {
-    const cx  = Math.floor(positions[i*3]   / cs);
-    const cz  = Math.floor(positions[i*3+2] / cs);
-    const key = (cx + 1000) * 10000 + (cz + 1000);
-    let cell = grid.get(key);
-    if (!cell) { cell = []; grid.set(key, cell); }
-    cell.push(i);
-  }
+    // Unproject mouse to the z=0 world plane
+    const ray = new THREE.Ray();
+    ray.origin.setFromMatrixPosition(camera.matrixWorld);
+    ray.direction.set(mouseNDC.x, mouseNDC.y, 0.5)
+      .unproject(camera)
+      .sub(ray.origin)
+      .normalize();
+    const t = -ray.origin.z / ray.direction.z;
+    mouseWorld.set(
+      ray.origin.x + ray.direction.x * t,
+      ray.origin.y + ray.direction.y * t,
+      0
+    );
+    renderMesh.material.uniforms.uMouseWorld.value.copy(mouseWorld);
+  }, { passive: true });
 
-  const pairsArr = [];
-
-  outer:
-  for (let i = 0; i < lineN; i++) {
-    const xi = positions[i*3], zi = positions[i*3+2];
-    const cx = Math.floor(xi / cs);
-    const cz = Math.floor(zi / cs);
-
-    for (let dcx = -1; dcx <= 1; dcx++) {
-      for (let dcz = -1; dcz <= 1; dcz++) {
-        const cell = grid.get((cx + dcx + 1000) * 10000 + (cz + dcz + 1000));
-        if (!cell) continue;
-        for (const j of cell) {
-          if (j <= i) continue;
-          const dx = xi               - positions[j*3];
-          const dy = positions[i*3+1] - positions[j*3+1];
-          const dz = zi               - positions[j*3+2];
-          if (dx*dx + dy*dy + dz*dz < distSq) {
-            pairsArr.push(i, j);
-            if (pairsArr.length >= CFG.MAX_LINES * 2) break outer;
-          }
-        }
-      }
-    }
-  }
-
-  lineIndexPairs = new Int32Array(pairsArr);
-  const lineCount = lineIndexPairs.length / 2;
-  linePositions   = new Float32Array(lineCount * 6);
-
-  // Write initial positions into line buffer
-  for (let l = 0; l < lineCount; l++) {
-    const i = lineIndexPairs[l*2], j = lineIndexPairs[l*2+1];
-    linePositions[l*6]   = positions[i*3];
-    linePositions[l*6+1] = positions[i*3+1];
-    linePositions[l*6+2] = positions[i*3+2];
-    linePositions[l*6+3] = positions[j*3];
-    linePositions[l*6+4] = positions[j*3+1];
-    linePositions[l*6+5] = positions[j*3+2];
-  }
-
-  const lineGeo = new THREE.BufferGeometry();
-  lineGeo.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
-
-  const lineMat = new THREE.LineBasicMaterial({
-    color:       0x0057FF,
-    transparent: true,
-    opacity:     CFG.LINE_OPACITY,
-    depthWrite:  false,
-    blending:    THREE.AdditiveBlending,
+  // ── Resize ────────────────────────────────────────────────────
+  window.addEventListener('resize', () => {
+    renderer.setSize(innerWidth, innerHeight);
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    composer.setSize(innerWidth, innerHeight);
   });
 
-  linesMesh = new THREE.LineSegments(lineGeo, lineMat);
-  scene.add(linesMesh);
-}
-
-// ── Differential orbital rotation ─────────────────────────────
-function updateOrbits() {
-  for (let i = 0; i < N; i++) {
-    const r = orbRadius[i];
-    // Inner core spins fast; outer arms slow (Keplerian-ish)
-    const omega = r < 30
-      ? CFG.BASE_OMEGA * 3
-      : CFG.BASE_OMEGA / Math.sqrt(r + 8);
-    orbAngle[i] += omega;
-    positions[i*3]   = r * Math.cos(orbAngle[i]) + dispX[i];
-    positions[i*3+1] = origY[i];
-    positions[i*3+2] = r * Math.sin(orbAngle[i]) + dispZ[i];
+  // ── Reduced-motion: freeze after first compute ────────────────
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    gpuCompute.compute();
+    renderMesh.material.uniforms.uPosTex.value =
+      gpuCompute.getCurrentRenderTarget(posVar).texture;
+    composer.render();
+    return;
   }
+
+  animate();
 }
 
-// ── Mouse gravity well ─────────────────────────────────────────
-function updateMouseGravity() {
-  if (!hasMouse) return;
-  const R2 = CFG.MOUSE_RADIUS * CFG.MOUSE_RADIUS;
-
-  for (let i = 0; i < N; i++) {
-    const px = positions[i*3];
-    const pz = positions[i*3+2];
-    const dx = mouseWorldX - px;
-    const dz = mouseWorldZ - pz;
-    const d2 = dx*dx + dz*dz;
-
-    if (d2 < R2 && d2 > 0.01) {
-      const d   = Math.sqrt(d2);
-      const inf = 1 - d / CFG.MOUSE_RADIUS;
-      const f   = inf * inf * CFG.MOUSE_GRAVITY * 0.018;
-      velX[i] += (dx / d) * f;
-      velZ[i] += (dz / d) * f;
-    }
-
-    // Spring restore toward zero displacement
-    velX[i] += -dispX[i] * 0.04;
-    velZ[i] += -dispZ[i] * 0.04;
-    // Damping
-    velX[i] *= CFG.GRAVITY_DAMPING;
-    velZ[i] *= CFG.GRAVITY_DAMPING;
-    dispX[i] += velX[i];
-    dispZ[i] += velZ[i];
-  }
-}
-
-// ── Sync line buffer from particle positions ───────────────────
-function updateLinePositions() {
-  const lc = lineIndexPairs.length / 2;
-  for (let l = 0; l < lc; l++) {
-    const i = lineIndexPairs[l*2], j = lineIndexPairs[l*2+1];
-    linePositions[l*6]   = positions[i*3];
-    linePositions[l*6+1] = positions[i*3+1];
-    linePositions[l*6+2] = positions[i*3+2];
-    linePositions[l*6+3] = positions[j*3];
-    linePositions[l*6+4] = positions[j*3+1];
-    linePositions[l*6+5] = positions[j*3+2];
-  }
-  linesMesh.geometry.attributes.position.needsUpdate = true;
-}
-
-// ── Mouse → galaxy plane projection ───────────────────────────
-function onMouseMove(e) {
-  hasMouse = true;
-  const ndcX =  (e.clientX / window.innerWidth)  * 2 - 1;
-  const ndcY = -(e.clientY / window.innerHeight) * 2 + 1;
-  raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
-  if (raycaster.ray.intersectPlane(galaxyPlane, intersectPt)) {
-    mouseWorldX = intersectPt.x;
-    mouseWorldZ = intersectPt.z;
-  }
-}
-
-// ── Main animation loop ────────────────────────────────────────
+// ── Render loop ───────────────────────────────────────────────
 function animate() {
-  camAngle += CFG.CAM_ORBIT_SPEED;
-  setCameraPosition();
-  updateOrbits();
-  updateMouseGravity();
-  pointsMesh.geometry.attributes.position.needsUpdate = true;
-  updateLinePositions();
-  renderer.render(scene, camera);
-}
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
 
-// ── Resize ─────────────────────────────────────────────────────
-function onResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  // GPGPU step
+  posVar.material.uniforms.uTime.value = t;
+  gpuCompute.compute();
+  renderMesh.material.uniforms.uPosTex.value =
+    gpuCompute.getCurrentRenderTarget(posVar).texture;
+
+  // Smooth colour transition between sections
+  colorA.lerp(targetA, 0.012);
+  colorB.lerp(targetB, 0.012);
+  renderMesh.material.uniforms.uColorA.value.copy(colorA);
+  renderMesh.material.uniforms.uColorB.value.copy(colorB);
+
+  // Camera gentle parallax following mouse
+  camera.position.x += (mouseNDC.x * 28  - camera.position.x) * 0.025;
+  camera.position.y += (mouseNDC.y * 18 + 80 - camera.position.y) * 0.025;
+  camera.lookAt(0, 0, 0);
+
+  composer.render();
 }
