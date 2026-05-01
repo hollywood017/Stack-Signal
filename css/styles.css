@@ -1451,3 +1451,9 @@ footer {
 .text-burn    { color: var(--burn); }
 .text-offwhite{ color: var(--offwhite); }
 .sr-only      { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+/* ── Contact form status ──────────────────────────────────── */
+.form-status { margin-top: 16px; padding: 0; font-size: 14px; line-height: 1.5; min-height: 0; transition: opacity 0.2s ease, padding 0.2s ease; opacity: 0; }
+.form-status[data-state="loading"] { opacity: 1; padding: 12px 16px; color: var(--offwhite); border-left: 2px solid rgba(255,255,255,0.3); }
+.form-status[data-state="success"] { opacity: 1; padding: 12px 16px; color: var(--cyan); background: rgba(0,217,255,0.08); border-left: 2px solid var(--cyan); border-radius: 4px; }
+.form-status[data-state="error"]   { opacity: 1; padding: 12px 16px; color: var(--burn); background: rgba(255,107,53,0.08); border-left: 2px solid var(--burn); border-radius: 4px; }

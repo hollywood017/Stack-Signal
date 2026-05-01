@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initSmoothScroll();
   initCustomCursor();
   initScrollRevealCards();
+  initContactForm();
 });
 
 // ── 1. Nav Scroll Blur ───────────────────────────────────────
@@ -357,5 +358,51 @@ function initScrollRevealCards() {
     card.style.transition = 'opacity 0.55s ease, transform 0.55s cubic-bezier(0.16, 1, 0.3, 1)';
     card.dataset.revealDelay = (i % 4) * 75; // 75ms stagger per row position
     observer.observe(card);
+  });
+}
+
+// ── Contact Form ─────────────────────────────────────────────
+function initContactForm() {
+  const form = document.querySelector('.contact-form');
+  if (!form) return;
+  const status = form.querySelector('.form-status');
+  const button = form.querySelector('button[type="submit"]');
+  const buttonSpan = button?.querySelector('span');
+  const originalLabel = buttonSpan?.textContent;
+
+  const setStatus = (state, msg) => {
+    if (!status) return;
+    status.dataset.state = state;
+    status.textContent = msg || '';
+  };
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    setStatus('loading', 'Sending…');
+    button.disabled = true;
+    if (buttonSpan) buttonSpan.textContent = 'Sending…';
+
+    const data = Object.fromEntries(new FormData(form).entries());
+
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const json = await res.json().catch(() => ({}));
+
+      if (res.ok && json.ok) {
+        setStatus('success', "Brief received. I'll reply within 24h.");
+        form.reset();
+      } else {
+        setStatus('error', json.error || 'Something went wrong. Try again or email nick@stackandsignal.agency.');
+      }
+    } catch (err) {
+      setStatus('error', 'Network error. Check your connection and try again.');
+    } finally {
+      button.disabled = false;
+      if (buttonSpan && originalLabel) buttonSpan.textContent = originalLabel;
+    }
   });
 }
