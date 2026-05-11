@@ -63,8 +63,11 @@ export default async function handler(req, res) {
     return res.status(500).json({ ok: false, error: 'Server not configured' });
   }
 
+  const NOTIFY_DISCORD_USER_ID = process.env.NOTIFY_DISCORD_USER_ID;
+  const mention = NOTIFY_DISCORD_USER_ID ? `<@${NOTIFY_DISCORD_USER_ID}> ` : '';
+
   const discordPayload = {
-    content: '@everyone new brief in',
+    content: `${mention}new brief in`,
     embeds: [{
       title: `${cleanName} — ${serviceLabel}`,
       color: 0x00D9FF,
@@ -75,7 +78,7 @@ export default async function handler(req, res) {
       ],
       timestamp: new Date().toISOString(),
     }],
-    allowed_mentions: { parse: ['everyone'] },
+    allowed_mentions: NOTIFY_DISCORD_USER_ID ? { users: [NOTIFY_DISCORD_USER_ID] } : { parse: [] },
   };
 
   try {
