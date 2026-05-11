@@ -396,7 +396,7 @@ function initContactForm() {
         setStatus('success', "Brief received. I'll reply within 24h.");
         form.reset();
       } else {
-        setStatus('error', json.error || 'Something went wrong. Try again or email nick@stackandsignal.agency.');
+        setStatus('error', json.error || 'Something went wrong. Try again in a moment.');
       }
     } catch (err) {
       setStatus('error', 'Network error. Check your connection and try again.');
