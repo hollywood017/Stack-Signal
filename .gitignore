@@ -1,0 +1,21 @@
+# Per-client proposal builds (deployed separately via Vercel CLI)
+proposals/
+
+# Local Vercel project linkage
+.vercel/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Claude worktree internals
+.claude/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

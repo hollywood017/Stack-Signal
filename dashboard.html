@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Signal · Deals Dashboard</title>
+<meta name="robots" content="noindex,nofollow" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23060D1A'/><text y='24' font-size='22' fill='%2300C2FF'>S</text></svg>" />
+<style>
+  :root{
+    --void:#060D1A;
+    --navy:#0A1628;
+    --navy-2:#0F1E36;
+    --signal:#0057FF;
+    --cyan:#00C2FF;
+    --burn:#FF4D00;
+    --offwhite:#F5F4EF;
+    --muted:#7A8599;
+    --line:rgba(0,194,255,.14);
+    --line-strong:rgba(0,194,255,.28);
+    --success:#39C26F;
+    --danger:#E64545;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--void);color:var(--offwhite);
+    font-family:'DM Sans',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;min-height:100vh;
+    background-image:
+      radial-gradient(circle at 15% 10%, rgba(0,87,255,.10), transparent 40%),
+      radial-gradient(circle at 85% 80%, rgba(255,77,0,.06), transparent 35%);
+  }
+  .gate{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .gate-card{
+    background:var(--navy);border:1px solid var(--line-strong);
+    padding:36px 38px;max-width:420px;width:100%;position:relative;
+  }
+  .gate-card::before{
+    content:"";position:absolute;top:0;left:0;right:0;height:3px;
+    background:linear-gradient(90deg,var(--signal),var(--cyan),var(--burn));
+  }
+  .logo{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:.1em;color:var(--offwhite)}
+  .logo .amp{color:var(--cyan);margin:0 4px}
+  .logo .dot{display:inline-block;width:7px;height:7px;background:var(--burn);border-radius:50%;margin-left:6px;transform:translateY(-3px)}
+  .gate-card .logo{margin-bottom:18px}
+  .gate-card h1{
+    font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:32px;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--offwhite);margin-bottom:8px;
+  }
+  .gate-card p{font-size:13.5px;color:var(--muted);line-height:1.6;margin-bottom:22px}
+  .gate-card input[type=email]{
+    width:100%;padding:11px 13px;font-family:'DM Sans',sans-serif;font-size:14px;
+    background:var(--void);border:1px solid var(--line);color:var(--offwhite);margin-bottom:14px;
+  }
+  .gate-card input:focus{outline:none;border-color:var(--cyan)}
+  .gate-msg{
+    margin-top:14px;padding:12px 14px;font-size:12.5px;line-height:1.5;
+    border:1px solid var(--line);background:rgba(0,194,255,.06);color:var(--cyan);
+  }
+  .gate-msg.err{border-color:rgba(230,69,69,.3);background:rgba(230,69,69,.08);color:var(--danger)}
+  .gate-msg.ok{border-color:rgba(57,194,111,.3);background:rgba(57,194,111,.08);color:var(--success)}
+
+  button{
+    cursor:pointer;border:none;
+    font-family:'Space Mono',monospace;font-size:11px;font-weight:700;
+    letter-spacing:.12em;text-transform:uppercase;padding:9px 14px;
+    transition:transform .1s, background .15s;
+  }
+  button:hover{transform:translateY(-1px)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .btn-primary{background:var(--signal);color:var(--offwhite);width:100%}
+  .btn-primary:hover:not(:disabled){background:#0048d6}
+  .btn-ghost{background:transparent;color:var(--cyan);border:1px solid var(--line-strong)}
+
+  #app{display:none}
+  #app.show{display:block}
+
+  .topbar{
+    background:var(--navy);border-bottom:1px solid var(--line);
+    padding:18px 28px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;
+    position:sticky;top:0;z-index:10;
+  }
+  .topbar .crumbs{flex:1;font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  .topbar .crumbs a{color:var(--cyan);text-decoration:none}
+  .topbar .userchip{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .topbar .userchip b{color:var(--cyan);font-weight:700}
+  .topbar .userchip a{color:var(--burn);text-decoration:none}
+
+  .wrap{padding:32px 28px 80px;max-width:1280px;margin:0 auto}
+
+  .headline{
+    font-family:'Bebas Neue',sans-serif;font-weight:400;
+    font-size:64px;letter-spacing:.04em;text-transform:uppercase;
+    line-height:.95;color:var(--offwhite);margin-bottom:8px;
+  }
+  .headline em{font-style:normal;color:var(--signal)}
+  .sub{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:36px}
+  .sub b{color:var(--cyan)}
+
+  .kpi-grid{
+    display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
+    gap:18px;margin-bottom:36px;
+  }
+  .kpi{
+    background:var(--navy);border:1px solid var(--line);
+    padding:22px 24px;position:relative;overflow:hidden;
+  }
+  .kpi::after{
+    content:"";position:absolute;top:0;right:0;width:3px;height:100%;background:var(--signal);
+  }
+  .kpi.cyan::after{background:var(--cyan)}
+  .kpi.burn::after{background:var(--burn)}
+  .kpi.success::after{background:var(--success)}
+  .kpi .lbl{
+    font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:8px;
+  }
+  .kpi .val{
+    font-family:'Bebas Neue',sans-serif;font-size:46px;letter-spacing:.03em;
+    color:var(--offwhite);line-height:1;
+  }
+  .kpi .delta{
+    font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.08em;
+    color:var(--cyan);margin-top:8px;
+  }
+
+  .row{display:grid;grid-template-columns:1.4fr 1fr;gap:18px;margin-bottom:18px}
+  @media (max-width:900px){.row{grid-template-columns:1fr}}
+
+  .panel{
+    background:var(--navy);border:1px solid var(--line);
+    padding:22px 26px;position:relative;
+  }
+  .panel h2{
+    font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:20px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--offwhite);margin-bottom:18px;
+    padding-bottom:10px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:10px;justify-content:space-between;
+  }
+  .panel h2 .pill{
+    font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:.14em;
+    background:var(--void);color:var(--cyan);padding:3px 8px;font-weight:700;
+  }
+
+  .pipeline-list{display:flex;flex-direction:column;gap:8px}
+  .pipeline-row{
+    display:flex;align-items:center;gap:14px;padding:8px 0;
+    border-bottom:1px dashed var(--line);
+  }
+  .pipeline-row:last-child{border-bottom:none}
+  .pipeline-row .label{
+    font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--offwhite);min-width:130px;
+  }
+  .pipeline-row .bar{flex:1;height:8px;background:rgba(0,194,255,.08);position:relative;overflow:hidden}
+  .pipeline-row .bar .fill{height:100%;background:var(--signal);transition:width .4s}
+  .pipeline-row.demo .bar .fill{background:var(--cyan)}
+  .pipeline-row.quote .bar .fill{background:#a855f7}
+  .pipeline-row.negotiate .bar .fill{background:#fbbf24}
+  .pipeline-row.onboarding .bar .fill{background:var(--burn)}
+  .pipeline-row.live .bar .fill{background:var(--success)}
+  .pipeline-row.paused .bar .fill{background:#94a3b8}
+  .pipeline-row.lost .bar .fill{background:var(--danger)}
+  .pipeline-row .count{
+    font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);
+    min-width:30px;text-align:right;
+  }
+
+  .upcoming-list{display:flex;flex-direction:column;gap:10px;max-height:380px;overflow-y:auto}
+  .upcoming{
+    background:var(--navy-2);border-left:3px solid var(--cyan);
+    padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;
+  }
+  .upcoming.overdue{border-left-color:var(--burn)}
+  .upcoming.soon{border-left-color:#fbbf24}
+  .upcoming .name{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.05em;color:var(--offwhite)}
+  .upcoming .when{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.08em}
+  .upcoming.overdue .when{color:var(--burn)}
+  .upcoming.soon .when{color:#fbbf24}
+
+  .service-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .service{
+    background:var(--navy-2);border:1px solid var(--line);padding:12px 14px;
+  }
+  .service .name{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .service .count{font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--offwhite);line-height:1}
+  .service .bar{margin-top:8px;height:4px;background:rgba(0,194,255,.08)}
+  .service .bar .fill{height:100%;background:var(--cyan);transition:width .4s}
+
+  .recent-list{display:flex;flex-direction:column;gap:8px;max-height:380px;overflow-y:auto}
+  .recent{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:10px 0;border-bottom:1px dashed var(--line);gap:10px;
+  }
+  .recent:last-child{border-bottom:none}
+  .recent .name{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.05em;color:var(--offwhite);line-height:1.1}
+  .recent .sub{font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:.08em;color:var(--muted);margin-top:2px}
+  .recent .money{font-family:'Space Mono',monospace;font-size:12px;color:var(--cyan);font-weight:700;white-space:nowrap}
+  .recent .money.mrr{color:var(--burn)}
+
+  .empty{color:var(--muted);font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;text-align:center;padding:30px 10px;border:1px dashed var(--line)}
+
+  .quick-actions{
+    display:flex;gap:10px;flex-wrap:wrap;margin-top:36px;
+    padding:18px 22px;border:1px solid var(--line);background:rgba(0,87,255,.04);
+  }
+  .quick-actions .label{font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);align-self:center;margin-right:10px}
+  .quick-actions a{
+    font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--cyan);text-decoration:none;
+    padding:7px 12px;border:1px solid var(--line-strong);
+  }
+  .quick-actions a:hover{background:rgba(0,194,255,.08)}
+
+</style>
+</head>
+<body>
+
+<!-- GATE -->
+<div class="gate" id="gate">
+  <div class="gate-card">
+    <div class="logo">SIGNAL<span class="amp">·</span>DEALS<span class="dot"></span></div>
+    <h1>Internal Only</h1>
+    <p>Stack &amp; Signal deals dashboard. Sign in with email and password.</p>
+    <form id="loginForm" onsubmit="doAuth(event)">
+      <input type="email" id="loginEmail" placeholder="email" required autocomplete="email" />
+      <input type="password" id="loginPassword" placeholder="password" required minlength="6" autocomplete="current-password" style="width:100%;padding:11px 13px;font-family:'DM Sans',sans-serif;font-size:14px;background:var(--void);border:1px solid var(--line);color:var(--offwhite);margin-bottom:14px" />
+      <button type="submit" class="btn-primary" id="loginBtn">Sign In</button>
+    </form>
+    <div id="gateMsg" class="gate-msg" style="display:none"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+
+<div class="topbar">
+  <div class="logo">SIGNAL<span class="amp">·</span>DEALS<span class="dot"></span></div>
+  <div class="crumbs"><a href="/">Stack &amp; Signal</a> / Internal / Deals Dashboard</div>
+  <span class="userchip">Signed in as <b id="userEmail">—</b> · <a href="#" onclick="signOut();return false">Sign out</a></span>
+</div>
+
+<div class="wrap">
+
+  <h1 class="headline">Where the <em>signal</em> is.</h1>
+  <p class="sub">Live business state · Last refresh <b id="lastRefresh">now</b></p>
+
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="lbl">MRR</div>
+      <div class="val" id="kpiMrr">$0</div>
+      <div class="delta" id="kpiMrrSub">— active clients</div>
+    </div>
+    <div class="kpi cyan">
+      <div class="lbl">Pipeline Value</div>
+      <div class="val" id="kpiPipeline">$0</div>
+      <div class="delta" id="kpiPipelineSub">— in flight</div>
+    </div>
+    <div class="kpi burn">
+      <div class="lbl">Active Clients</div>
+      <div class="val" id="kpiActive">0</div>
+      <div class="delta" id="kpiActiveSub">— paying right now</div>
+    </div>
+    <div class="kpi success">
+      <div class="lbl">Annual Run Rate</div>
+      <div class="val" id="kpiArr">$0</div>
+      <div class="delta">MRR × 12</div>
+    </div>
+  </div>
+
+  <!-- ROW 1 -->
+  <div class="row">
+    <div class="panel">
+      <h2>Pipeline <span class="pill"><span id="totalCount">0</span> total</span></h2>
+      <div class="pipeline-list" id="pipelineList"></div>
+    </div>
+    <div class="panel">
+      <h2>Upcoming Check-Ins</h2>
+      <div class="upcoming-list" id="upcomingList"></div>
+    </div>
+  </div>
+
+  <!-- ROW 2 -->
+  <div class="row">
+    <div class="panel">
+      <h2>Recent Activity</h2>
+      <div class="recent-list" id="recentList"></div>
+    </div>
+    <div class="panel">
+      <h2>Services Engaged</h2>
+      <div class="service-grid" id="serviceGrid"></div>
+    </div>
+  </div>
+
+  <div class="quick-actions">
+    <span class="label">Quick Links</span>
+    <a href="https://crm.stackandsignal.agency" target="_blank">Open CRM →</a>
+    <a href="https://onboarding.stackandsignal.agency" target="_blank">Onboarding Form →</a>
+    <a href="https://obx-proposal.vercel.app" target="_blank">Latest Proposal →</a>
+  </div>
+
+</div>
+
+</div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL = 'https://edkflipzzfyfsdzdgoph.supabase.co';
+const SUPABASE_KEY = 'sb_publishable__PgbZ3W83M-FZBlwySoc6w_dIj7dzFL';
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let clients = [];
+let currentUser = null;
+
+const COLS = [
+  { id:'demo', title:'Demo Sent', group:'pipeline' },
+  { id:'quote', title:'Quote Sent', group:'pipeline' },
+  { id:'negotiate', title:'Negotiating', group:'pipeline' },
+  { id:'onboarding', title:'Onboarding', group:'active' },
+  { id:'live', title:'Live', group:'active' },
+  { id:'paused', title:'Paused', group:'active' },
+  { id:'lost', title:'Lost / Churned', group:'archive' },
+];
+
+// AUTH
+window.doAuth = async function(e){
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const btn = document.getElementById('loginBtn');
+  const msg = document.getElementById('gateMsg');
+  btn.disabled = true; btn.textContent = 'Signing in...';
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  btn.disabled = false; btn.textContent = 'Sign In';
+  if (error){ msg.className='gate-msg err'; msg.textContent=error.message; msg.style.display='block'; }
+};
+window.signOut = async function(){ await sb.auth.signOut(); location.reload(); };
+
+async function checkAuth(){
+  const { data } = await sb.auth.getSession();
+  if (data.session){
+    currentUser = data.session.user;
+    document.getElementById('gate').style.display = 'none';
+    document.getElementById('app').classList.add('show');
+    document.getElementById('userEmail').textContent = currentUser.email;
+    await load();
+  } else {
+    document.getElementById('gate').style.display = 'flex';
+    document.getElementById('app').classList.remove('show');
+  }
+}
+sb.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') checkAuth();
+  if (event === 'SIGNED_OUT') location.reload();
+});
+
+async function load(){
+  const { data, error } = await sb.from('ss_clients').select('*');
+  if (error){ alert('Load: ' + error.message); return; }
+  clients = data || [];
+  render();
+}
+
+function render(){
+  let mrr=0, pipelineVal=0, active=0;
+  clients.forEach(c => {
+    const col = COLS.find(x => x.id === c.status);
+    if (!col) return;
+    if (col.group === 'pipeline'){
+      pipelineVal += (Number(c.one_time)||0) + (Number(c.monthly)||0)*12;
+    } else if (col.group === 'active' && c.status !== 'paused'){
+      active++;
+      mrr += Number(c.monthly)||0;
+    }
+  });
+
+  document.getElementById('kpiMrr').textContent = '$' + mrr.toLocaleString();
+  document.getElementById('kpiMrrSub').textContent = active + ' active client' + (active===1?'':'s');
+  document.getElementById('kpiPipeline').textContent = '$' + pipelineVal.toLocaleString();
+  const pipelineCount = clients.filter(c => {
+    const col = COLS.find(x => x.id === c.status); return col && col.group === 'pipeline';
+  }).length;
+  document.getElementById('kpiPipelineSub').textContent = pipelineCount + ' deal' + (pipelineCount===1?'':'s') + ' in flight';
+  document.getElementById('kpiActive').textContent = active;
+  const allActiveCount = clients.filter(c => {
+    const col = COLS.find(x => x.id === c.status); return col && col.group === 'active';
+  }).length;
+  document.getElementById('kpiActiveSub').textContent = allActiveCount === active ? 'all paying' : (allActiveCount - active) + ' paused';
+  document.getElementById('kpiArr').textContent = '$' + (mrr*12).toLocaleString();
+
+  // Pipeline bar chart
+  const maxCount = Math.max(1, ...COLS.map(col => clients.filter(c => c.status === col.id).length));
+  const pl = document.getElementById('pipelineList');
+  pl.innerHTML = '';
+  COLS.forEach(col => {
+    const count = clients.filter(c => c.status === col.id).length;
+    const pct = (count / maxCount) * 100;
+    const row = document.createElement('div');
+    row.className = 'pipeline-row ' + col.id;
+    row.innerHTML = `
+      <div class="label">${col.title}</div>
+      <div class="bar"><div class="fill" style="width:${pct}%"></div></div>
+      <div class="count">${count}</div>
+    `;
+    pl.appendChild(row);
+  });
+  document.getElementById('totalCount').textContent = clients.length;
+
+  // Upcoming check-ins
+  const upcomingList = document.getElementById('upcomingList');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const upcoming = clients
+    .filter(c => c.next_checkin)
+    .map(c => ({ c, diff: Math.round((new Date(c.next_checkin) - today) / 86400000) }))
+    .sort((a,b) => a.diff - b.diff)
+    .slice(0, 8);
+  if (!upcoming.length){
+    upcomingList.innerHTML = '<div class="empty">No upcoming check-ins</div>';
+  } else {
+    upcomingList.innerHTML = upcoming.map(({c, diff}) => {
+      let cls = '', label = '';
+      if (diff < 0){ cls='overdue'; label=`Overdue ${-diff}d`; }
+      else if (diff === 0){ cls='soon'; label='Today'; }
+      else if (diff <= 7){ cls='soon'; label=`In ${diff}d`; }
+      else { label = new Date(c.next_checkin).toLocaleDateString(); }
+      return `<div class="upcoming ${cls}">
+        <div><div class="name">${escapeHtml(c.name)}</div></div>
+        <div class="when">${label}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Recent activity
+  const recentList = document.getElementById('recentList');
+  const recent = [...clients].sort((a,b) => new Date(b.updated_at) - new Date(a.updated_at)).slice(0, 8);
+  if (!recent.length){
+    recentList.innerHTML = '<div class="empty">No clients yet — add some in the CRM</div>';
+  } else {
+    recentList.innerHTML = recent.map(c => {
+      const col = COLS.find(x => x.id === c.status);
+      const isActive = col && col.group === 'active';
+      const money = isActive && c.monthly
+        ? `<span class="money mrr">$${Number(c.monthly).toLocaleString()}/mo</span>`
+        : (c.one_time ? `<span class="money">$${Number(c.one_time).toLocaleString()}</span>` : '<span class="money" style="color:var(--muted)">—</span>');
+      return `<div class="recent">
+        <div>
+          <div class="name">${escapeHtml(c.name)}</div>
+          <div class="sub">${col ? col.title : c.status} · updated ${timeAgo(c.updated_at)}</div>
+        </div>
+        ${money}
+      </div>`;
+    }).join('');
+  }
+
+  // Services breakdown
+  const sg = document.getElementById('serviceGrid');
+  const services = ['redesign','new_build','hosting','seo','ads','email'];
+  const labels = {redesign:'Redesigns',new_build:'New Builds',hosting:'Hosting',seo:'SEO',ads:'Ads',email:'Email Mktg'};
+  const counts = {};
+  services.forEach(s => counts[s] = clients.filter(c => (c.scope||[]).includes(s)).length);
+  const maxSvc = Math.max(1, ...Object.values(counts));
+  sg.innerHTML = services.map(s => {
+    const pct = (counts[s] / maxSvc) * 100;
+    return `<div class="service">
+      <div class="name">${labels[s]}</div>
+      <div class="count">${counts[s]}</div>
+      <div class="bar"><div class="fill" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('lastRefresh').textContent = new Date().toLocaleTimeString();
+}
+
+function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function timeAgo(iso){
+  if (!iso) return 'recently';
+  const diff = (Date.now() - new Date(iso)) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  return Math.floor(diff/86400) + 'd ago';
+}
+
+checkAuth();
+// Auto refresh every 60s
+setInterval(() => { if (currentUser) load(); }, 60000);
+</script>
+
+</body>
+</html>
